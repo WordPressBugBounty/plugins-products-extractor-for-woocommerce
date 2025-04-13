@@ -2,8 +2,8 @@
 Contributors: torobplugin
 Tags: products, woocommerce, export, extract, torob
 Requires at least: 5.2
-Tested up to: 6.0
-Stable tag: 1.3.0
+Tested up to: 6.8.0
+Stable tag: 1.3.1
 Requires PHP: 7.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
@@ -46,6 +46,11 @@ License URI: https://opensource.org/licenses/MIT
 2. &#x202b;سپس پلاگین را از قسمت افزونه های داشبورد خودتان فعال نمایید.
 
 == Changelog ==
+= 1.3.1 =
+* اصلاحات کد
+* دریافت ورژن php , wordpress , woocommerce
+* حذف ورودی auto_update
+* حذف کلید registry
 
 = 1.3.0 =
 * اصلاح لیست تصاویر محصول
