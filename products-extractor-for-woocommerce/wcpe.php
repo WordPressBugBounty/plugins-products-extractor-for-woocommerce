@@ -2,7 +2,7 @@
 /**
  * Plugin Name: استخراج محصولات ووکامرس برای ترب - رسمی
  * Description: افزونه ای برای استخراج تمامی محصولات ووکامرس
- * Version: 1.3.1
+ * Version: 1.3.2
  * Author: Torob
  * Author URI: https://torob.com/
  * License: MIT
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Check if WooCommerce is active
 if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) {
 	class WC_Products_Extractor extends WP_REST_Controller {
-		private $plugin_version = "1.3.1";
+		private $plugin_version = "1.3.2";
 
 		public function __construct() {
 			add_action( 'rest_api_init', array( $this, 'register_routes' ) );
@@ -428,6 +428,12 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 					} else {
 						$data = $this->get_all_products( $show_variations, $limit, $page );
 					}
+					$data['metadata'] = array(
+						'wordpress_version'   => get_bloginfo( 'version' ),
+						'php_version'         => $this->php_version(),
+						'plugin_version'      => $this->plugin_version,
+						'woocommerce_version' => $this->woocommerce_version(),
+					);
 					$response_code = 200;
 				} else {
 					$data['response'] = $response_body;
@@ -435,12 +441,6 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 					$response_code    = 401;
 				}
 			}
-			$data['metadata'] = array(
-			    'wordpress_version'   => get_bloginfo( 'version' ),
-			    'php_version'         => $this->php_version(),
-			    'plugin_version'      => $this->plugin_version,
-			    'woocommerce_version' => $this->woocommerce_version(),
-			);
 
 			return new WP_REST_Response( $data, $response_code );
 		}
