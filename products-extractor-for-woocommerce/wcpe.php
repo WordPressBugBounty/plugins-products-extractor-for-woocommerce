@@ -1,13 +1,16 @@
 <?php
 /**
- * Plugin Name: استخراج محصولات ووکامرس برای ترب - رسمی
+ * Plugin Name: افزونه رسمی ترب
  * Description: افزونه ای برای استخراج تمامی محصولات ووکامرس
- * Version: 1.3.2
+ * Version: 1.4.0
+ * Requires at least: 5.9
+ * Requires PHP: 7.4
  * Author: Torob
  * Author URI: https://torob.com/
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
  * Text Domain: products-extractor-for-woocommerce
+ * Requires Plugins: woocommerce
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Check if WooCommerce is active
 if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) {
 	class WC_Products_Extractor extends WP_REST_Controller {
-		private $plugin_version = "1.3.2";
+		private $plugin_version = "1.4.0";
 
 		public function __construct() {
 			add_action( 'rest_api_init', array( $this, 'register_routes' ) );
@@ -36,6 +39,28 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 				return PHP_VERSION;
 			} elseif ( function_exists( 'phpversion' ) ) {
 				return phpversion();
+			}
+
+			return null;
+		}
+
+		private function beta_test_plugin_version() {
+			return defined( 'TOROB_BETA_TEST_VERSION' ) ? TOROB_BETA_TEST_VERSION : null;
+		}
+
+		private function libsodium_version() {
+			// Native sodium extension (bundled in PHP 7.2+, PECL libsodium for older)
+			if ( extension_loaded( 'sodium' ) || extension_loaded( 'libsodium' ) ) {
+				if ( defined( 'SODIUM_LIBRARY_VERSION' ) ) {
+					return SODIUM_LIBRARY_VERSION;
+				}
+
+				return 'unknown';
+			}
+
+			// Polyfill/compat library (WordPress includes sodium_compat)
+			if ( class_exists( 'ParagonIE_Sodium_Compat', false ) ) {
+				return ParagonIE_Sodium_Compat::VERSION_STRING . '-compat';
 			}
 
 			return null;
@@ -82,12 +107,12 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 		}
 
 		/**
-		* Check update and validate the request
-		*
-		* @param WP_REST_Request $request The REST API request object.
-		*
-		* @return array|WP_Error The response from the remote server or an error object.
-		*/
+		 * Check update and validate the request
+		 *
+		 * @param WP_REST_Request $request The REST API request object.
+		 *
+		 * @return array|WP_Error The response from the remote server or an error object.
+		 */
 		public function check_request( $request ) {
 			// Get shop domain
 			$site_url    = wp_parse_url( get_site_url() );
@@ -107,28 +132,28 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 
 			// Verify token
 			return wp_safe_remote_post( $endpoint_url, array(
-					'method'      => 'POST',
-					'timeout'     => 12,
-					'redirection' => 0,
-					'httpversion' => '1.1',
-					'blocking'    => true,
-					'headers'     => array(
-						'AUTHORIZATION' => $header,
-					),
-					'body'        => array(
-						'token'       => $token,
-						'shop_domain' => $shop_domain,
-						'version'     => $this->plugin_version
-					),
-					'cookies'     => array()
-				) );
+				'method'      => 'POST',
+				'timeout'     => 12,
+				'redirection' => 0,
+				'httpversion' => '1.1',
+				'blocking'    => true,
+				'headers'     => array(
+					'AUTHORIZATION' => $header,
+				),
+				'body'        => array(
+					'token'       => $token,
+					'shop_domain' => $shop_domain,
+					'version'     => $this->plugin_version
+				),
+				'cookies'     => array()
+			) );
 		}
 
 
 		/**
 		 * Get single product values
 		 */
-		public function get_product_values( $product, $is_child = false ) {
+		public function get_product_values( WC_Product $product, $is_child = false ) {
 			$temp_product = new stdClass();
 			if ( $is_child ) {
 				$parent                  = wc_get_product( $product->get_parent_id() );
@@ -146,9 +171,11 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 			$temp_product->current_price = $product->get_price();
 			$temp_product->old_price     = $product->get_regular_price();
 			$temp_product->availability  = $product->get_stock_status();
-			$temp_product->category_name = get_term_by( 'id', end( $cat_ids ), 'product_cat', 'ARRAY_A' )['name'];
-			$temp_product->image_links   = [];
-			$attachment_ids              = $product->get_gallery_image_ids();
+			if ( $cat_ids ) {
+				$temp_product->category_name = get_term_by( 'id', end( $cat_ids ), 'product_cat', 'ARRAY_A' )['name'];
+			}
+			$temp_product->image_links = [];
+			$attachment_ids            = $product->get_gallery_image_ids();
 			foreach ( $attachment_ids as $attachment_id ) {
 				$t_link = wp_get_attachment_image_src( $attachment_id, 'full' );
 				if ( $t_link ) {
@@ -164,11 +191,13 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 			} else {
 				$temp_product->image_link = null;
 			}
-			$temp_product->page_url   = get_permalink( $product->get_id() );
-			$temp_product->short_desc = $product->get_short_description();
-			$temp_product->spec       = array();
-			$temp_product->date       = $product->get_date_created();
-			$temp_product->guarantee  = '';
+			$temp_product->page_url     = $product->get_permalink();
+			$temp_product->short_desc   = $product->get_short_description();
+			$temp_product->spec         = array();
+			$temp_product->date_added   = $product->get_date_created() ? $product->get_date_created()->format( DATE_ATOM ) : null;
+			$temp_product->date_updated = $product->get_date_modified() ? $product->get_date_modified()->format( DATE_ATOM ) : null;
+			$temp_product->product_type = $product->get_type();
+			$temp_product->guarantee    = '';
 
 			if ( ! $is_child ) {
 				if ( $product->is_type( 'variable' ) ) {
@@ -198,7 +227,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 								} else {
 									$value = '';
 								}
-								$key                                     = wc_attribute_label( $key );
+								$key = wc_attribute_label( $key );
 							}
 							$temp_product->spec[ urldecode( $key ) ] = rawurldecode( $value );
 						}
@@ -228,7 +257,7 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 							} else {
 								$value = '';
 							}
-							$key                                     = wc_attribute_label( $key );
+							$key = wc_attribute_label( $key );
 						}
 						$temp_product->spec[ urldecode( $key ) ] = rawurldecode( $value );
 					}
@@ -268,6 +297,32 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 		}
 
 		/**
+		 * @param WC_Product[] $products
+		 *
+		 * @return void
+		 */
+		private function fill_image_caches( array $products ) {
+			$attachment_ids = array();
+			foreach ( $products as $product ) {
+				// Collect attachment IDs (featured image + gallery)
+				$image_id = $product->get_image_id();
+				if ( $image_id ) {
+					$attachment_ids[] = $image_id;
+				}
+				$gallery_ids = $product->get_gallery_image_ids();
+				if ( ! empty( $gallery_ids ) ) {
+					$attachment_ids = array_merge( $attachment_ids, $gallery_ids );
+				}
+			}
+
+			// Prime attachment post + meta cache in one batch query
+			$attachment_ids = array_unique( array_filter( $attachment_ids ) );
+			if ( ! empty( $attachment_ids ) ) {
+				_prime_post_caches( $attachment_ids, false, true );
+			}
+		}
+
+		/**
 		 * Get all products
 		 *
 		 * @param bool $show_variations Whether to include product variations.
@@ -277,55 +332,44 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 		 * @return array The data containing products, count, and max pages.
 		 */
 		private function get_all_products( $show_variations, $limit, $page ) {
+			$args = [
+				'posts_per_page'         => $limit,
+				'paged'                  => $page,
+				'post_status'            => 'publish',
+				'orderby'                => 'ID',
+				'order'                  => 'DESC',
+				'post_type'              => [ 'product' ],
+				"update_post_term_cache" => true,
+				"update_post_meta_cache" => true,
+				"cache_results"          => false,
+			];
 			if ( $show_variations ) {
-				// Make query
-				$query    = new WP_Query( array(
-					'posts_per_page' => $limit,
-					'paged'          => $page,
-					'post_status'    => 'publish',
-					'orderby'        => 'ID',
-					'order'          => 'DESC',
-					'post_type'      => array( 'product', 'product_variation' ),
-				) );
-			} else {
-				// Make query
-				$query    = new WP_Query( array(
-					'posts_per_page' => $limit,
-					'paged'          => $page,
-					'post_status'    => 'publish',
-					'orderby'        => 'ID',
-					'order'          => 'DESC',
-					'post_type'      => array( 'product' ),
-				) );
+				$args['post_type'] = [ 'product', 'product_variation' ];
 			}
-			$products = $query->get_posts();
-
-			// Count products
-			$data['count'] = $query->found_posts;
-
-			// Total pages
+			$query = new WP_Query( $args );
+			# Product data is already cached, so calling wc_get_product() must cause no queries at all.
+			$products          = array_filter( array_map( 'wc_get_product', $query->posts ) );
+			$data['count']     = $query->found_posts;
 			$data['max_pages'] = $query->max_num_pages;
-
-			$data['products'] = array();
-
+			$data['products']  = array();
+			$this->fill_image_caches( $products );
 			// Retrieve and send data in json
 			foreach ( $products as $product ) {
-				$product   = wc_get_product( $product->ID );
 				$parent_id = $product->get_parent_id();
 				// Process for parent product
 				if ( $parent_id == 0 ) {
 					// Exclude the variable product. (variations of it will be inserted.)
 					if ( $show_variations ) {
 						if ( ! $product->is_type( 'variable' ) ) {
-							$data['products'][]       = $this->get_product_values( $product );
+							$data['products'][] = $this->get_product_values( $product );
 						}
 					} else {
-						$data['products'][]       = $this->get_product_values( $product );
+						$data['products'][] = $this->get_product_values( $product );
 					}
 				} else {
 					// Process for visible child
 					if ( $product->get_price() ) {
-						$data['products'][]       = $this->get_product_values( $product, true );
+						$data['products'][] = $this->get_product_values( $product, true );
 					}
 				}
 			}
@@ -334,13 +378,13 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 		}
 
 		/**
-		  * Get a list of products by their IDs.
-		  *
-		  * @param array $product_list An array of product IDs to retrieve.
-		  *
-		  * @return array The list of products with their details.
-		  */
-		 private function get_list_products( $product_list ) {
+		 * Get a list of products by their IDs.
+		 *
+		 * @param array $product_list An array of product IDs to retrieve.
+		 *
+		 * @return array The list of products with their details.
+		 */
+		private function get_list_products( $product_list ) {
 			$data['products'] = array();
 
 			// Retrieve and send data in json
@@ -350,11 +394,11 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 					$parent_id = $product->get_parent_id();
 					// Process for parent product
 					if ( $parent_id == 0 ) {
-						$data['products'][]       = $this->get_product_values( $product );
+						$data['products'][] = $this->get_product_values( $product );
 					} else {
 						// Process for visible child
 						if ( $product->get_price() ) {
-							$data['products'][]       = $this->get_product_values( $product, true );
+							$data['products'][] = $this->get_product_values( $product, true );
 						}
 					}
 				}
@@ -412,7 +456,8 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 			$data = array();
 			// Check request is valid and update
 			$response = $this->check_request( $request );
-			if ( ! is_array( $response ) ) {
+			if ( is_wp_error( $response ) ) {
+				error_log( sprintf( '[Torob Plugin] Connection to extractor.torob.com failed: %s (%s)', $response->get_error_message(), $response->get_error_code() ) );
 				$data['response'] = '';
 				$data['error']    = $response;
 				$response_code    = 500;
@@ -429,12 +474,14 @@ if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', g
 						$data = $this->get_all_products( $show_variations, $limit, $page );
 					}
 					$data['metadata'] = array(
-						'wordpress_version'   => get_bloginfo( 'version' ),
-						'php_version'         => $this->php_version(),
-						'plugin_version'      => $this->plugin_version,
-						'woocommerce_version' => $this->woocommerce_version(),
+						'wordpress_version'        => get_bloginfo( 'version' ),
+						'php_version'              => $this->php_version(),
+						'plugin_version'           => $this->plugin_version,
+						'woocommerce_version'      => $this->woocommerce_version(),
+						'beta_test_plugin_version' => $this->beta_test_plugin_version(),
+						'libsodium_version'        => $this->libsodium_version(),
 					);
-					$response_code = 200;
+					$response_code    = 200;
 				} else {
 					$data['response'] = $response_body;
 					$data['error']    = $response['error'];

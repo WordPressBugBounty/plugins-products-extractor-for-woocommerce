@@ -1,10 +1,10 @@
-=== استخراج محصولات ووکامرس برای ترب - رسمی ===
+=== افزونه رسمی ترب ===
 Contributors: torobplugin
 Tags: products, woocommerce, export, extract, torob
-Requires at least: 5.2
-Tested up to: 6.8.0
-Stable tag: 1.3.2
-Requires PHP: 7.0
+Requires at least: 5.9
+Tested up to: 6.9.0
+Stable tag: 1.4.0
+Requires PHP: 7.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -46,7 +46,12 @@ License URI: https://opensource.org/licenses/MIT
 2. &#x202b;سپس پلاگین را از قسمت افزونه های داشبورد خودتان فعال نمایید.
 
 == Changelog ==
-= 1.3.2 =
+= 1.4.0 =
+* بهینه‌سازی تعداد کوئری‌های دیتابیس
+* تغییرات جزئی در فرایند دریافت محصولات
+* دریافت نسخه‌ی پلاگین بتاتست در صورت نصب بودن
+
+= 1.3.1 =
 * اصلاحات کد
 * دریافت ورژن php , wordpress , woocommerce
 * حذف ورودی auto_update
