@@ -6,6 +6,8 @@ namespace Torob\ProductExtraction;
 
 use ParagonIE_Sodium_Compat;
 use stdClass;
+use Torob\Utils\Options;
+use Torob\Utils\ProductExtractionUtils;
 use Torob\Utils\TorobTokenValidator;
 use WC_Data_Store;
 use WC_Product;
@@ -20,6 +22,12 @@ if (!defined('ABSPATH')) {
 class ProductExtractor
 {
     private const API_VERSION = 'torob_woocommerce_products_v1';
+    private const INFORMATIONAL_PRODUCT_FIELDS = [
+        'parent_id',
+        'date_added',
+        'date_updated',
+        'product_type'
+    ];
 
     public function __construct() {}
 
@@ -93,7 +101,7 @@ class ProductExtractor
             $cat_ids = $product->get_category_ids();
             $temp_product->parent_id = 0;
         }
-        $temp_product->page_unique = $product->get_id();
+        $temp_product->page_unique = ProductExtractionUtils::get_page_unique($product);
         $temp_product->current_price = $product->get_price();
         $temp_product->old_price = $product->get_regular_price();
         $temp_product->availability = $product->get_stock_status();
@@ -117,7 +125,7 @@ class ProductExtractor
         } else {
             $temp_product->image_link = null;
         }
-        $temp_product->page_url = $product->get_permalink();
+        $temp_product->page_url = ProductExtractionUtils::get_page_url($product);
         $temp_product->short_desc = $product->get_short_description();
         $temp_product->spec = [];
         $temp_product->date_added = $product->get_date_created()
@@ -238,11 +246,16 @@ class ProductExtractor
      * @param bool $show_variations Whether to include product variations.
      * @param int $limit The number of products to retrieve per page.
      * @param int $page The current page number.
+     * @param bool $include_informational_fields Whether to include fields useful for debugging but not directly shown in Torob.
      *
      * @return array The data containing products, count, current page, and max pages.
      */
-    public function get_all_products(bool $show_variations, int $limit, int $page): array
-    {
+    public function get_all_products(
+        bool $show_variations,
+        int $limit,
+        int $page,
+        bool $include_informational_fields = true
+    ): array {
         $args = [
             'posts_per_page' => $limit,
             'paged' => $page,
@@ -286,7 +299,30 @@ class ProductExtractor
             }
         }
 
+        if (!$include_informational_fields) {
+            $data['products'] = $this->remove_informational_product_fields($data['products']);
+        }
+
         return $data;
+    }
+
+    /**
+     * Remove fields that help diagnostics but do not directly affect Torob-visible product data.
+     */
+    private function remove_informational_product_fields(array $products): array
+    {
+        return array_map(static function ($product) {
+            if (!is_object($product)) {
+                return $product;
+            }
+
+            $filtered_product = clone $product;
+            foreach (self::INFORMATIONAL_PRODUCT_FIELDS as $field) {
+                unset($filtered_product->{$field});
+            }
+
+            return $filtered_product;
+        }, $products);
     }
 
     /**
@@ -407,7 +443,25 @@ class ProductExtractor
             'plugin_version' => TOROB_PLUGIN_VERSION,
             'woocommerce_version' => $this->woocommerce_version(),
             'beta_test_plugin_version' => $this->beta_test_plugin_version(),
-            'libsodium_version' => $this->libsodium_version()
+            'libsodium_version' => $this->libsodium_version(),
+            'hpos_enabled' => Options::isHposEnabled(),
+            'options' => $this->build_options_metadata()
+        ];
+    }
+
+    /**
+     * Build normalized plugin options metadata without exposing secret option values.
+     *
+     * @return array The plugin options metadata.
+     */
+    private function build_options_metadata(): array
+    {
+        return [
+            'order_status_enabled' => Options::isOrderStatusEnabled(),
+            'orders_list_api_enabled' => Options::isOrdersListApiEnabled(),
+            'product_page_webhook_enabled' => Options::isProductPageWebhookEnabled(),
+            'has_torob_token' => Options::getToken() !== '',
+            'torob_token_set_at' => Options::getTokenSetAt()
         ];
     }
 

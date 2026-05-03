@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Torob\OrderStatusTracking;
 
+use Torob\Utils\Options;
 use Torob\Utils\TorobTokenValidator;
 use WC_Order;
 use WP_Post;
@@ -21,21 +22,6 @@ if (!defined('ABSPATH')) {
  */
 class OrderHandler
 {
-    /**
-     * Option name for order status endpoint setting
-     */
-    const OPTION_ORDER_STATUS_ENABLED = 'torob_order_status_enabled';
-
-    /**
-     * Default value for order status enabled option (enabled by default)
-     */
-    const OPTION_ORDER_STATUS_ENABLED_TRUE_VALUE = '1';
-
-    /**
-     * Value for order status enabled option when disabled
-     */
-    const OPTION_ORDER_STATUS_ENABLED_FALSE_VALUE = '0';
-
     /**
      * Meta field keys for order tracking information
      */
@@ -65,14 +51,17 @@ class OrderHandler
      */
     public function register_order_status_route(TorobTokenValidator $validator): void
     {
-        if (!$this->is_order_status_enabled()) {
-            return;
-        }
-
         register_rest_route('torob-api/v1', '/order-status', [
             'methods' => 'GET',
             'callback' => [$this, 'get_order_status'],
-            'permission_callback' => [$validator, 'validate_token']
+            'permission_callback' => [$validator, 'validate_token'],
+            'args' => [
+                'customer_phone' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'description' => 'Customer phone number as an 11-digit Iranian mobile number starting with 09.'
+                ]
+            ]
         ]);
     }
 
@@ -97,7 +86,7 @@ class OrderHandler
      */
     public function get_order_status(WP_REST_Request $request): WP_REST_Response
     {
-        if (!$this->is_order_status_enabled()) {
+        if (!Options::isOrderStatusEnabled()) {
             return new WP_REST_Response(['error' => 'Order status endpoint is disabled'], 403);
         }
 
@@ -170,12 +159,7 @@ class OrderHandler
         $six_months_ago = wp_date('Y-m-d H:i:s', time() - (6 * MONTH_IN_SECONDS) - 1);
         $phone_pattern = substr($phone, 1);
 
-        $hpos_enabled =
-            class_exists('Automattic\WooCommerce\Utilities\OrderUtil')
-            && method_exists('Automattic\WooCommerce\Utilities\OrderUtil', 'custom_orders_table_usage_is_enabled')
-            && \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
-
-        if ($hpos_enabled) {
+        if (Options::isHposEnabled()) {
             $args = [
                 'limit' => 100,
                 'orderby' => 'date',
@@ -427,7 +411,7 @@ class OrderHandler
     public function add_torob_tracking_meta_box(): void
     {
         // Lazy check: only check option value when actually on order edit page
-        if (!$this->is_order_status_enabled()) {
+        if (!Options::isOrderStatusEnabled()) {
             return;
         }
 
@@ -466,7 +450,6 @@ class OrderHandler
 
         $wc_status = $order->get_status();
         $is_paid = $order->is_paid();
-        $has_tracking = !empty($order->get_meta(self::META_TRACKING_CODE));
 
         // Determine which status group UI to show based on order status
         $status_group = 'default';
@@ -682,7 +665,7 @@ class OrderHandler
     public function save_torob_tracking_meta_box(int $post_id, $post): void
     {
         // Lazy check: only process save if feature is enabled
-        if (!$this->is_order_status_enabled()) {
+        if (!Options::isOrderStatusEnabled()) {
             return;
         }
 
@@ -734,18 +717,5 @@ class OrderHandler
         }
 
         $order->save();
-    }
-
-    /**
-     * Check if order status endpoint is enabled
-     *
-     * @return bool
-     */
-    private function is_order_status_enabled(): bool
-    {
-        return (
-            get_option(self::OPTION_ORDER_STATUS_ENABLED, self::OPTION_ORDER_STATUS_ENABLED_TRUE_VALUE)
-            === self::OPTION_ORDER_STATUS_ENABLED_TRUE_VALUE
-        );
     }
 }

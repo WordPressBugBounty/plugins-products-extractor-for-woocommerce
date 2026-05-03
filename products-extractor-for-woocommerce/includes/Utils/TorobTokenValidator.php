@@ -29,13 +29,6 @@ class TorobTokenValidator
     private const TEHRAN_TIMEZONE = 'Asia/Tehran';
 
     /**
-     * Torob token validation endpoint URL
-     *
-     * @var string
-     */
-    const VALIDATION_ENDPOINT = 'https://extractor.torob.com/validate_token/';
-
-    /**
      * Torob's Ed25519 public key (base64-encoded, 32 bytes) for JWT signature verification.
      * Extracted from the DER-encoded public key: MCowBQYDK2VwAyEAt6Mu4T0pBORY11W+QeM35UsmLO3vsf+6yKpFDEImFk0=
      */
@@ -60,8 +53,8 @@ class TorobTokenValidator
      */
     public function validate_token(WP_REST_Request $request)
     {
-        $token = $this->sanitize_header_value($request->get_header('X-Torob-Token'));
-        $token_version = $this->sanitize_header_value($request->get_header('X-Torob-Token-Version'));
+        $token = self::sanitize_opaque_token_value($request->get_header('X-Torob-Token'));
+        $token_version = self::sanitize_opaque_token_value($request->get_header('X-Torob-Token-Version'));
 
         if ($token === null || $token === '') {
             return $this->create_error_response(
@@ -196,7 +189,7 @@ class TorobTokenValidator
      *
      * @return string|null
      */
-    private function sanitize_header_value($value): ?string
+    public static function sanitize_opaque_token_value($value): ?string
     {
         if (!is_string($value)) {
             return null;
@@ -221,24 +214,7 @@ class TorobTokenValidator
     {
         $shop_domain = $this->get_expected_audience();
 
-        $body = [
-            'token' => $token,
-            'shop_domain' => $shop_domain
-        ];
-
-        if (is_string($token_version) && $token_version !== '') {
-            $body['token_version'] = sanitize_text_field($token_version);
-        }
-
-        $response = wp_safe_remote_post(self::VALIDATION_ENDPOINT, [
-            'method' => 'POST',
-            'timeout' => 12,
-            'redirection' => 0,
-            'httpversion' => '1.1',
-            'blocking' => true,
-            'body' => $body,
-            'cookies' => []
-        ]);
+        $response = TorobHttpClient::validate_token($token, $shop_domain, $token_version);
 
         if (is_wp_error($response)) {
             error_log(sprintf(

@@ -4,7 +4,7 @@
     'name' => 'torob/wordpress_plugin',
     'pretty_version' => 'dev-master',
     'version' => 'dev-master',
-    'reference' => '3d94c1a7f117b4edf52c002d989a824810e99662',
+    'reference' => 'eb80c0f0dbff8c76ae6fd95c8012f1807ade5bf3',
     'type' => 'wordpress-plugin',
     'install_path' => __DIR__ . '/../',
     'aliases' => 
