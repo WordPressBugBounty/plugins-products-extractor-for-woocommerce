@@ -3,8 +3,8 @@ Contributors: torobplugin
 Tags: products, woocommerce, export, extract, torob
 Requires at least: 5.9
 Requires Plugins: woocommerce
-Tested up to: 6.9.0
-Stable tag: 2.1.1
+Tested up to: 7.0.0
+Stable tag: 2.1.2
 Requires PHP: 7.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
@@ -19,6 +19,8 @@ License URI: https://opensource.org/licenses/MIT
 
 * حداقل نسخه وردپرس: 5.9
 * حداقل نسخه ووکامرس: 6.9
+* تست‌شده تا نسخه وردپرس: 7.0
+* تست‌شده تا نسخه ووکامرس: 10.7
 
 = نکات مهم =
 
@@ -37,7 +39,7 @@ License URI: https://opensource.org/licenses/MIT
 == Changelog ==
 
 
-= 2.1.0 =
+= 2.1.2 =
 
 * اضافه شدن همگام‌سازی سفارش‌های ثبت‌شده از مسیر ترب و نمایش آن‌ها در پنل ترب.
 * اضافه شدن وب‌هوک تغییرات محصول برای ارسال سریع‌تر تغییرات مهم محصولات به ترب.

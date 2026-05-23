@@ -439,7 +439,10 @@ class OrderTrackingHandler
         }
 
         $parsed_url = wp_parse_url($product_url);
-        if (is_array($parsed_url) && (isset($parsed_url['scheme']) || isset($parsed_url['host']))) {
+        if (
+            is_array($parsed_url)
+            && (($parsed_url['scheme'] ?? null) !== null || ($parsed_url['host'] ?? null) !== null)
+        ) {
             return $product_url;
         }
 

@@ -15,7 +15,6 @@ if (!defined('ABSPATH')) {
  */
 final class Options
 {
-    private const ACTIVE_PLUGINS_OPTION = 'active_plugins';
     private const ORDER_UTIL_CLASS = 'Automattic\WooCommerce\Utilities\OrderUtil';
     public const ORDER_STATUS_ENABLED_OPTION = 'torob_order_status_enabled';
     public const ORDERS_LIST_API_ENABLED_OPTION = 'torob_orders_list_api_enabled';
@@ -37,9 +36,7 @@ final class Options
      */
     public static function isWooCommerceActive(): bool
     {
-        $active_plugins = apply_filters('active_plugins', get_option(self::ACTIVE_PLUGINS_OPTION, []));
-
-        return is_array($active_plugins) && in_array('woocommerce/woocommerce.php', $active_plugins, true);
+        return class_exists('WooCommerce', false);
     }
 
     /**
