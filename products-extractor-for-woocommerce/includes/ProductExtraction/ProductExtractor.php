@@ -82,25 +82,19 @@ class ProductExtractor
      * Get single product values.
      *
      * @param WC_Product $product The product to extract values from.
-     * @param bool $is_child Whether this product is a child/variation.
+     * @param WC_Product|null $parent The valid parent product when extracting a variation.
      *
      * @return stdClass The extracted product data.
      */
-    public function get_product_values(WC_Product $product, bool $is_child = false): stdClass
+    public function get_product_values(WC_Product $product, ?WC_Product $parent = null): stdClass
     {
+        $source_product = $parent ?? $product;
+
         $temp_product = new stdClass();
-        if ($is_child) {
-            $parent = wc_get_product($product->get_parent_id());
-            $temp_product->title = $parent->get_name();
-            $temp_product->subtitle = get_post_meta($product->get_parent_id(), 'product_english_name', true);
-            $cat_ids = $parent->get_category_ids();
-            $temp_product->parent_id = $parent->get_id();
-        } else {
-            $temp_product->title = $product->get_name();
-            $temp_product->subtitle = get_post_meta($product->get_id(), 'product_english_name', true);
-            $cat_ids = $product->get_category_ids();
-            $temp_product->parent_id = 0;
-        }
+        $temp_product->title = $source_product->get_name();
+        $temp_product->subtitle = get_post_meta($source_product->get_id(), 'product_english_name', true);
+        $cat_ids = $source_product->get_category_ids();
+        $temp_product->parent_id = $parent ? $parent->get_id() : 0;
         $temp_product->page_unique = ProductExtractionUtils::get_page_unique($product);
         $temp_product->current_price = $product->get_price();
         $temp_product->old_price = $product->get_regular_price();
@@ -137,7 +131,7 @@ class ProductExtractor
         $temp_product->product_type = $product->get_type();
         $temp_product->guarantee = '';
 
-        if (!$is_child) {
+        if ($parent === null) {
             if ($product->is_type('variable')) {
                 // Find price for default attributes. If it can't find return max price of variations
                 $temp_product->current_price = 0;
@@ -280,23 +274,16 @@ class ProductExtractor
         $this->fill_image_caches($products);
         // Retrieve and send data in json
         foreach ($products as $product) {
-            $parent_id = $product->get_parent_id();
-            // Process for parent product
-            if ($parent_id === 0) {
-                // Exclude the variable product. (variations of it will be inserted.)
-                if ($show_variations) {
-                    if (!$product->is_type('variable')) {
-                        $data['products'][] = $this->get_product_values($product);
-                    }
-                } else {
-                    // Process for visible child
-                    $data['products'][] = $this->get_product_values($product);
-                }
-            } else {
-                if ($product->get_price()) {
-                    $data['products'][] = $this->get_product_values($product, true);
-                }
+            $is_variation = $product->is_type('variation');
+            $parent = $is_variation ? $this->get_valid_parent($product) : null;
+            if ($is_variation && (!$product->get_price() || $parent === null)) {
+                continue;
             }
+            if ($show_variations && $product->is_type('variable')) {
+                continue;
+            }
+
+            $data['products'][] = $this->get_product_values($product, $parent);
         }
 
         if (!$include_informational_fields) {
@@ -339,20 +326,29 @@ class ProductExtractor
         foreach ($product_list as $pid) {
             $product = wc_get_product($pid);
             if ($product && $product->get_status() === 'publish') {
-                $parent_id = $product->get_parent_id();
-                // Process for parent product
-                if ($parent_id === 0) {
-                    $data['products'][] = $this->get_product_values($product);
-                } else {
-                    // Process for visible child
-                    if ($product->get_price()) {
-                        $data['products'][] = $this->get_product_values($product, true);
-                    }
+                $is_variation = $product->is_type('variation');
+                $parent = $is_variation ? $this->get_valid_parent($product) : null;
+                if ($is_variation && (!$product->get_price() || $parent === null)) {
+                    continue;
                 }
+
+                $data['products'][] = $this->get_product_values($product, $parent);
             }
         }
 
         return $data;
+    }
+
+    private function get_valid_parent(WC_Product $product): ?WC_Product
+    {
+        $parent_id = $product->get_parent_id();
+        if ($parent_id === 0) {
+            return null;
+        }
+
+        $parent = wc_get_product($parent_id);
+
+        return $parent instanceof WC_Product ? $parent : null;
     }
 
     /**

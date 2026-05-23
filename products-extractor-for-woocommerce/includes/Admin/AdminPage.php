@@ -384,7 +384,6 @@ class AdminPage
 			<th scope="row">
 				<label class="torob-webhook-label" for="<?php echo esc_attr(Options::PRODUCT_PAGE_WEBHOOK_ENABLED_OPTION); ?>">
 					وب‌هوک
-					<span class="torob-experimental-badge">آزمایشی</span>
 				</label>
 			</th>
 			<td>
@@ -727,22 +726,6 @@ class AdminPage
 				display: inline-flex;
 				align-items: center;
 				gap: 8px;
-			}
-
-			.torob-experimental-badge {
-				display: inline-flex;
-				align-items: center;
-				padding: 3px 10px;
-				border-radius: 999px;
-				border: 1px solid #b8d3ea;
-				background: #f0f6fc;
-				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-				color: #135e96;
-				font-size: 10px;
-				font-weight: 600;
-				line-height: 1.6;
-				vertical-align: middle;
-				white-space: nowrap;
 			}
 
 			.torob-webhook-status {

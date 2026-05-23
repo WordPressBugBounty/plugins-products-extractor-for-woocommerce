@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: افزونه رسمی ترب
  * Description: افزونه ای برای استخراج تمامی محصولات ووکامرس
- * Version: 2.1.0
+ * Version: 2.1.1
  * Requires at least: 5.9
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -23,7 +23,7 @@ use Torob\Utils\Options;
 
 defined('ABSPATH') || exit();
 
-const TOROB_PLUGIN_VERSION = '2.1.0';
+const TOROB_PLUGIN_VERSION = '2.1.1';
 
 require_once plugin_dir_path(__FILE__) . 'deps/autoload.php';
 

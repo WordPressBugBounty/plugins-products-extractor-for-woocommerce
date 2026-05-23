@@ -389,10 +389,7 @@ class OrderTrackingHandler
             $order_value += (int) round((float) $item->get_total());
             $product = $item->get_product();
             if ($product) {
-                $product_url = get_permalink($product->get_id());
-                if (!$product_url) {
-                    $product_url = home_url('/');
-                }
+                $product_url = $this->normalize_product_url(get_permalink($product->get_id()));
                 $products[] = [
                     'product_url' => $product_url,
                     'product_price' => (int) round((float) $item->get_total() / max(1, $item->get_quantity())),
@@ -408,7 +405,10 @@ class OrderTrackingHandler
 
         $date_created = $order->get_date_created();
         $date_modified = $order->get_date_modified();
-        $date_for_last = $date_modified ?? $date_created;
+        $date_for_last = $date_created;
+        if ($date_modified instanceof \WC_DateTime && $date_modified->getTimestamp() >= $date_created->getTimestamp()) {
+            $date_for_last = $date_modified;
+        }
         return [
             'purchase_timestamp' => $this->format_iso8601_timestamp($date_created->getTimestamp()),
             'torob_clid' => $torob_clid,
@@ -422,6 +422,28 @@ class OrderTrackingHandler
             'phone_number' => $phone_number,
             'products' => $products
         ];
+    }
+
+    /**
+     * Normalize a product permalink to an absolute URL.
+     *
+     * Some shops or plugins filter permalinks into site-relative paths.
+     * The orders API should always return an absolute product URL.
+     *
+     * @param string|false $product_url Raw permalink returned by WordPress.
+     */
+    private function normalize_product_url($product_url): string
+    {
+        if (!is_string($product_url) || $product_url === '') {
+            return home_url('/');
+        }
+
+        $parsed_url = wp_parse_url($product_url);
+        if (is_array($parsed_url) && (isset($parsed_url['scheme']) || isset($parsed_url['host']))) {
+            return $product_url;
+        }
+
+        return home_url($product_url);
     }
 
     /**

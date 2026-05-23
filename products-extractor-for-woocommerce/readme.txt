@@ -4,7 +4,7 @@ Tags: products, woocommerce, export, extract, torob
 Requires at least: 5.9
 Requires Plugins: woocommerce
 Tested up to: 6.9.0
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 Requires PHP: 7.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
@@ -35,6 +35,7 @@ License URI: https://opensource.org/licenses/MIT
 3. افزونه را از بخش `افزونه‌ها` فعال کنید.
 
 == Changelog ==
+
 
 = 2.1.0 =
 
