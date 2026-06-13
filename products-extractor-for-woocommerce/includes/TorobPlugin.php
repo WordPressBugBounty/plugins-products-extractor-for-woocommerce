@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Torob;
 
 use Torob\Admin\AdminPage;
+use Torob\Lifecycle\LifecycleEventReporter;
 use Torob\OrderStatusTracking\OrderHandler;
 use Torob\ProductExtraction\ProductExtractor;
 use Torob\ProductWebhook\WebhookHandler;
@@ -27,6 +28,7 @@ class TorobPlugin
     private WebhookHandler $product_page_webhook_handler;
     private AdminPage $admin_page;
     private TorobTokenValidator $token_validator;
+    private LifecycleEventReporter $lifecycle_event_reporter;
 
     public static function instance(): TorobPlugin
     {
@@ -40,15 +42,18 @@ class TorobPlugin
     public static function activate(): void
     {
         DatabaseSchemaManager::migrateIfNeeded();
+        LifecycleEventReporter::record_activation();
     }
 
     public static function deactivate(): void
     {
+        LifecycleEventReporter::record_deactivation();
         WebhookHandler::plugin_deactivated();
     }
 
     public static function uninstall(): void
     {
+        LifecycleEventReporter::record_uninstall();
         WebhookQueueRepository::drop_table();
         Options::deleteAllPluginOptions();
     }
@@ -61,6 +66,7 @@ class TorobPlugin
         $this->product_page_webhook_handler = new WebhookHandler();
         $this->admin_page = new AdminPage($this->product_extractor, $this->product_page_webhook_handler);
         $this->token_validator = new TorobTokenValidator();
+        $this->lifecycle_event_reporter = new LifecycleEventReporter();
     }
 
     public function register_hooks(): void
@@ -77,6 +83,7 @@ class TorobPlugin
 
         $this->order_tracking_handler->register_hooks();
         $this->product_page_webhook_handler->register_hooks();
+        $this->lifecycle_event_reporter->register_hooks();
     }
 
     public function register_routes(): void

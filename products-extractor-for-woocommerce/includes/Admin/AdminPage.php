@@ -151,10 +151,14 @@ class AdminPage
             ]];
         }
 
-        $result = TorobHttpClient::check_health();
-        $details = $result->get_details_array();
+        $extractor_result = TorobHttpClient::check_extractor_health();
+        $backend_result = TorobHttpClient::check_backend_health();
+        $details = [
+            $this->build_connectivity_service_detail('extractor.torob.com', $extractor_result),
+            $this->build_connectivity_service_detail('api.torob.com', $backend_result)
+        ];
 
-        if ($result->is_successful()) {
+        if ($extractor_result->is_successful() && $backend_result->is_successful()) {
             return [[
                 'type' => 'success',
                 'message' => 'ارتباط با ترب برقرار است.',
@@ -170,6 +174,26 @@ class AdminPage
     }
 
     /**
+     * Build visible diagnostic details for one Torob service.
+     *
+     * @return array{service: string, status: string, successful: bool, class: string, details: array<int, array{label: string, value: string}>}
+     */
+    private function build_connectivity_service_detail(
+        string $service_label,
+        TorobConnectivityCheckResult $result
+    ): array {
+        return [
+            'service' => $service_label,
+            'status' => $result->is_successful() ? 'سالم' : 'دارای مشکل',
+            'successful' => $result->is_successful(),
+            'class' => $result->is_successful()
+                ? 'torob-connectivity-service-success'
+                : 'torob-connectivity-service-error',
+            'details' => $result->get_details_array()
+        ];
+    }
+
+    /**
      * Render admin notices.
      *
      * @param array $notices Array of notices with 'type' and 'message' keys.
@@ -182,18 +206,49 @@ class AdminPage
 			<div class="notice notice-<?php echo esc_attr($notice['type']); ?> is-dismissible">
 				<p><?php echo esc_html($notice['message']); ?></p>
 				<?php if (!empty($details) && is_array($details)): ?>
-					<ul class="torob-connectivity-details">
-						<?php foreach ($details as $detail): ?>
-							<li>
-								<strong><?php echo esc_html($detail['label']); ?>:</strong>
-								<?php echo esc_html($detail['value']); ?>
-							</li>
-						<?php endforeach; ?>
-					</ul>
+					<?php if ($this->is_connectivity_service_details($details)): ?>
+						<div class="torob-connectivity-service-list">
+							<?php foreach ($details as $detail): ?>
+								<div class="torob-connectivity-service <?php echo esc_attr($detail['class']); ?>">
+									<div class="torob-connectivity-service-header">
+										<strong><?php echo esc_html($detail['service']); ?></strong>
+										<span><?php echo esc_html($detail['status']); ?></span>
+									</div>
+									<ul class="torob-connectivity-details">
+										<?php foreach ($detail['details'] as $service_detail): ?>
+											<li>
+												<strong><?php echo esc_html($service_detail['label']); ?>:</strong>
+												<?php echo esc_html($service_detail['value']); ?>
+											</li>
+										<?php endforeach; ?>
+									</ul>
+								</div>
+							<?php endforeach; ?>
+						</div>
+					<?php else: ?>
+						<ul class="torob-connectivity-details">
+							<?php foreach ($details as $detail): ?>
+								<li>
+									<strong><?php echo esc_html($detail['label']); ?>:</strong>
+									<?php echo esc_html($detail['value']); ?>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+					<?php endif; ?>
 				<?php endif; ?>
 			</div>
 			<?php
         }
+    }
+
+    /**
+     * @param array<int, mixed> $details
+     */
+    private function is_connectivity_service_details(array $details): bool
+    {
+        $first_detail = reset($details);
+
+        return is_array($first_detail) && array_key_exists('service', $first_detail);
     }
 
     /**
@@ -752,6 +807,54 @@ class AdminPage
 
 			.torob-connectivity-check .description {
 				margin-top: 8px;
+			}
+
+			.torob-connectivity-service-list {
+				display: grid;
+				max-width: 640px;
+				gap: 8px;
+				margin: 10px 0;
+			}
+
+			.torob-connectivity-service {
+				padding: 10px 12px;
+				border: 1px solid #dcdcde;
+				border-right-width: 4px;
+				border-radius: 3px;
+				background: #fff;
+			}
+
+			.torob-connectivity-service-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+			}
+
+			.torob-connectivity-service-header span {
+				padding: 2px 8px;
+				border-radius: 999px;
+				font-size: 12px;
+				font-weight: 600;
+				white-space: nowrap;
+			}
+
+			.torob-connectivity-service-success {
+				border-right-color: #00a32a;
+			}
+
+			.torob-connectivity-service-success .torob-connectivity-service-header span {
+				color: #007017;
+				background: #edfaef;
+			}
+
+			.torob-connectivity-service-error {
+				border-right-color: #d63638;
+			}
+
+			.torob-connectivity-service-error .torob-connectivity-service-header span {
+				color: #b32d2e;
+				background: #fcf0f1;
 			}
 
 			.torob-connectivity-details {

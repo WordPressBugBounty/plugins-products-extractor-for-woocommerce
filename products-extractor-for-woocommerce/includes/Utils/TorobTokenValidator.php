@@ -119,15 +119,7 @@ class TorobTokenValidator
      */
     private function get_expected_audience(): string
     {
-        $site_url = wp_parse_url(get_site_url());
-        $host = $site_url['host'] ?? '';
-        $host = str_replace('www.', '', $host);
-
-        if (($site_url['port'] ?? null) !== null) {
-            $host .= ':' . $site_url['port'];
-        }
-
-        return $host;
+        return SiteData::domain();
     }
 
     /**

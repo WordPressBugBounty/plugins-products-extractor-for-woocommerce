@@ -23,6 +23,7 @@ final class Options
     public const TOKEN_SET_AT_OPTION = 'torob_token_set_at';
     public const PLUGIN_DB_VERSION_OPTION = 'torob_plugin_db_version';
     public const PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION = 'torob_product_webhook_processing_lock';
+    public const REPORTED_VERSION_OPTION = 'torob_plugin_reported_version';
     private const ENABLED_VALUE = '1';
     private const DISABLED_VALUE = '0';
 
@@ -202,6 +203,24 @@ final class Options
     }
 
     /**
+     * Get the plugin version last reported to Torob via a lifecycle event.
+     *
+     * Empty string means nothing has been reported yet.
+     */
+    public static function getReportedVersion(): string
+    {
+        return (string) get_option(self::REPORTED_VERSION_OPTION, '');
+    }
+
+    /**
+     * Persist the plugin version last reported to Torob via a lifecycle event.
+     */
+    public static function setReportedVersion(string $version): bool
+    {
+        return update_option(self::REPORTED_VERSION_OPTION, $version, true);
+    }
+
+    /**
      * Get all WordPress option names owned by this plugin.
      *
      * @return array The plugin option names.
@@ -215,7 +234,8 @@ final class Options
             self::TOKEN_OPTION,
             self::TOKEN_SET_AT_OPTION,
             self::PLUGIN_DB_VERSION_OPTION,
-            self::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION
+            self::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION,
+            self::REPORTED_VERSION_OPTION
         ];
     }
 

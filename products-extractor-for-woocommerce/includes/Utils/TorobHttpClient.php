@@ -19,9 +19,50 @@ final class TorobHttpClient
 {
     const TOKEN_VALIDATION_ENDPOINT = 'https://extractor.torob.com/validate_token/';
     const PRODUCT_PAGE_WEBHOOK_ENDPOINT = 'https://api.torob.com/update/webhook/v1/';
-    const HEALTH_CHECK_ENDPOINT = 'https://extractor.torob.com/health_check/';
+    const EXTRACTOR_HEALTH_CHECK_ENDPOINT = 'https://extractor.torob.com/health_check/';
+    const BACKEND_HEALTH_CHECK_ENDPOINT = 'https://api.torob.com/update/health_check/';
+    const LIFECYCLE_EVENT_ENDPOINT = 'https://extractor.torob.com/woocommerce_plugin/event/';
 
     private function __construct() {}
+
+    /**
+     * POST a plugin lifecycle event to Torob.
+     *
+     * The request is non-blocking with a short timeout and failures are swallowed.
+     *
+     * @param string $event          One of activated|updated|deactivated|uninstalled.
+     * @param string $plugin_version The current plugin version.
+     */
+    public static function send_lifecycle_event(string $event, string $plugin_version): void
+    {
+        $body = [
+            'site_url' => SiteData::url(),
+            'event' => $event,
+            'plugin_version' => $plugin_version,
+            'wc_version' => SiteData::woocommerce_version(),
+            'wp_version' => SiteData::wordpress_version()
+        ];
+
+        $response = wp_safe_remote_post(self::LIFECYCLE_EVENT_ENDPOINT, [
+            'method' => 'POST',
+            'timeout' => 2,
+            'redirection' => 0,
+            'httpversion' => '1.1',
+            'blocking' => false,
+            'body' => wp_json_encode($body),
+            'headers' => ['Content-Type' => 'application/json'],
+            'cookies' => []
+        ]);
+
+        if (is_wp_error($response)) {
+            error_log(sprintf(
+                '[Torob Plugin] Lifecycle event "%s" dispatch failed: %s (%s)',
+                $event,
+                $response->get_error_message(),
+                $response->get_error_code()
+            ));
+        }
+    }
 
     /**
      * Send token validation data to Torob.
@@ -104,10 +145,20 @@ final class TorobHttpClient
         return new WebhookSendResult(true, $status_code);
     }
 
-    public static function check_health(): TorobConnectivityCheckResult
+    public static function check_extractor_health(): TorobConnectivityCheckResult
+    {
+        return self::check_health_endpoint(self::EXTRACTOR_HEALTH_CHECK_ENDPOINT, 'Extractor');
+    }
+
+    public static function check_backend_health(): TorobConnectivityCheckResult
+    {
+        return self::check_health_endpoint(self::BACKEND_HEALTH_CHECK_ENDPOINT, 'Backend');
+    }
+
+    private static function check_health_endpoint(string $endpoint, string $service_label): TorobConnectivityCheckResult
     {
         $start_time = microtime(true);
-        $response = wp_safe_remote_get(self::HEALTH_CHECK_ENDPOINT, [
+        $response = wp_safe_remote_get($endpoint, [
             'timeout' => 12,
             'redirection' => 0,
             'httpversion' => '1.1',
@@ -118,7 +169,8 @@ final class TorobHttpClient
 
         if (is_wp_error($response)) {
             error_log(sprintf(
-                '[Torob Plugin] Health check connection failed: %s (%s)',
+                '[Torob Plugin] %s health check connection failed: %s (%s)',
+                $service_label,
                 $response->get_error_message(),
                 $response->get_error_code()
             ));
@@ -132,7 +184,7 @@ final class TorobHttpClient
 
         $http_status_code = (int) wp_remote_retrieve_response_code($response);
         if ($http_status_code !== 200) {
-            error_log(sprintf('[Torob Plugin] Health check returned HTTP %d', $http_status_code));
+            error_log(sprintf('[Torob Plugin] %s health check returned HTTP %d', $service_label, $http_status_code));
 
             return TorobConnectivityCheckResult::http_failure($request_time_seconds, $http_status_code);
         }

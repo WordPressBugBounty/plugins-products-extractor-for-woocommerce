@@ -37,6 +37,7 @@ class ComposerStaticInit6e451e282a84313ff857f0f74a2d9cd1
         'TorobDeps\\Firebase\\JWT\\SignatureInvalidException' => __DIR__ . '/..' . '/firebase/php-jwt/src/SignatureInvalidException.php',
         'Torob\\Admin\\AdminPage' => __DIR__ . '/../..' . '/includes/Admin/AdminPage.php',
         'Torob\\Admin\\TorobConnectivityCheckResult' => __DIR__ . '/../..' . '/includes/Admin/TorobConnectivityCheckResult.php',
+        'Torob\\Lifecycle\\LifecycleEventReporter' => __DIR__ . '/../..' . '/includes/Lifecycle/LifecycleEventReporter.php',
         'Torob\\OrderStatusTracking\\OrderHandler' => __DIR__ . '/../..' . '/includes/OrderStatusTracking/OrderHandler.php',
         'Torob\\OrderStatusTracking\\OrderStatusEnum' => __DIR__ . '/../..' . '/includes/OrderStatusTracking/OrderStatusEnum.php',
         'Torob\\OrderStatusTracking\\TorobStatusEnum' => __DIR__ . '/../..' . '/includes/OrderStatusTracking/TorobStatusEnum.php',
@@ -53,6 +54,7 @@ class ComposerStaticInit6e451e282a84313ff857f0f74a2d9cd1
         'Torob\\Utils\\DatabaseSchemaManager' => __DIR__ . '/../..' . '/includes/Utils/DatabaseSchemaManager.php',
         'Torob\\Utils\\Options' => __DIR__ . '/../..' . '/includes/Utils/Options.php',
         'Torob\\Utils\\ProductExtractionUtils' => __DIR__ . '/../..' . '/includes/Utils/ProductExtractionUtils.php',
+        'Torob\\Utils\\SiteData' => __DIR__ . '/../..' . '/includes/Utils/SiteData.php',
         'Torob\\Utils\\TorobHttpClient' => __DIR__ . '/../..' . '/includes/Utils/TorobHttpClient.php',
         'Torob\\Utils\\TorobTokenValidator' => __DIR__ . '/../..' . '/includes/Utils/TorobTokenValidator.php',
     );

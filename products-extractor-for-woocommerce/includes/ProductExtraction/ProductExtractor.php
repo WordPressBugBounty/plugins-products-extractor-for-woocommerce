@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Torob\ProductExtraction;
 
-use ParagonIE_Sodium_Compat;
 use stdClass;
 use Torob\Utils\Options;
 use Torob\Utils\ProductExtractionUtils;
+use Torob\Utils\SiteData;
 use Torob\Utils\TorobTokenValidator;
 use WC_Data_Store;
 use WC_Product;
@@ -96,9 +96,14 @@ class ProductExtractor
         $cat_ids = $source_product->get_category_ids();
         $temp_product->parent_id = $parent ? $parent->get_id() : 0;
         $temp_product->page_unique = ProductExtractionUtils::get_page_unique($product);
-        $temp_product->current_price = $product->get_price();
-        $temp_product->old_price = $product->get_regular_price();
         $temp_product->availability = $product->get_stock_status();
+        if ($parent === null && $product->is_type('variable')) {
+            $temp_product->current_price = 0;
+            $temp_product->old_price = 0;
+        } else {
+            $temp_product->current_price = $this->get_display_price($product, $product->get_price());
+            $temp_product->old_price = $this->get_display_price($product, $product->get_regular_price());
+        }
         if ($cat_ids) {
             $temp_product->category_name = get_term_by('id', end($cat_ids), 'product_cat', 'ARRAY_A')['name'];
         }
@@ -134,18 +139,21 @@ class ProductExtractor
         if ($parent === null) {
             if ($product->is_type('variable')) {
                 // Find price for default attributes. If it can't find return max price of variations
-                $temp_product->current_price = 0;
-                $temp_product->old_price = 0;
-                // Find price for default attributes. If it can't find return max price of variations
                 $variation_id = $this->find_matching_variation($product, $product->get_default_attributes());
                 if ($variation_id !== 0) {
                     $variation = wc_get_product($variation_id);
-                    $temp_product->current_price = $variation->get_price();
-                    $temp_product->old_price = $variation->get_regular_price();
+                    $temp_product->current_price = $this->get_display_price($variation, $variation->get_price());
+                    $temp_product->old_price = $this->get_display_price($variation, $variation->get_regular_price());
                     $temp_product->availability = $variation->get_stock_status();
                 } else {
-                    $temp_product->current_price = $product->get_variation_price('max');
-                    $temp_product->old_price = $product->get_variation_regular_price('max');
+                    $temp_product->current_price = $this->normalize_display_price($product->get_variation_price(
+                        'max',
+                        true
+                    ));
+                    $temp_product->old_price = $this->normalize_display_price($product->get_variation_regular_price(
+                        'max',
+                        true
+                    ));
                 }
                 // Extract default attributes
                 foreach ($product->get_default_attributes() as $key => $value) {
@@ -232,6 +240,41 @@ class ProductExtractor
         }
 
         return $temp_product;
+    }
+
+    /**
+     * Convert a raw WooCommerce product price to the same tax display mode used on product pages.
+     *
+     * @param WC_Product $product Product used for tax class/rate lookup.
+     * @param mixed $price Raw product price.
+     *
+     * @return mixed Display price, preserving unchanged raw values.
+     */
+    private function get_display_price(WC_Product $product, $price)
+    {
+        if ($price === '' || !wc_tax_enabled() || !$product->is_taxable()) {
+            return $price;
+        }
+
+        $display_price = wc_get_price_to_display($product, [
+            'price' => (float) $price
+        ]);
+
+        return $this->normalize_display_price($display_price);
+    }
+
+    private function normalize_display_price($price)
+    {
+        if ($price === '') {
+            return $price;
+        }
+
+        $display_price = (float) $price;
+        if (abs($display_price - round($display_price)) < 0.000_001) {
+            return (string) intval(round($display_price));
+        }
+
+        return wc_format_decimal($display_price, wc_get_price_decimals());
     }
 
     /**
@@ -434,12 +477,12 @@ class ProductExtractor
     public function build_metadata(): array
     {
         return [
-            'wordpress_version' => get_bloginfo('version'),
-            'php_version' => $this->php_version(),
+            'wordpress_version' => SiteData::wordpress_version(),
+            'php_version' => SiteData::php_version(),
             'plugin_version' => TOROB_PLUGIN_VERSION,
-            'woocommerce_version' => $this->woocommerce_version(),
-            'beta_test_plugin_version' => $this->beta_test_plugin_version(),
-            'libsodium_version' => $this->libsodium_version(),
+            'woocommerce_version' => SiteData::woocommerce_version(),
+            'beta_test_plugin_version' => SiteData::beta_test_plugin_version(),
+            'libsodium_version' => SiteData::libsodium_version(),
             'hpos_enabled' => Options::isHposEnabled(),
             'options' => $this->build_options_metadata()
         ];
@@ -459,47 +502,5 @@ class ProductExtractor
             'has_torob_token' => Options::getToken() !== '',
             'torob_token_set_at' => Options::getTokenSetAt()
         ];
-    }
-
-    private function woocommerce_version(): string
-    {
-        if (defined('WC_VERSION')) {
-            return WC_VERSION;
-        } else {
-            return WC()->version;
-        }
-    }
-
-    private function php_version(): ?string
-    {
-        if (defined('PHP_VERSION')) {
-            return PHP_VERSION;
-        } elseif (function_exists('phpversion')) {
-            return phpversion();
-        }
-
-        return null;
-    }
-
-    private function beta_test_plugin_version(): ?string
-    {
-        return defined('TOROB_BETA_TEST_VERSION') ? TOROB_BETA_TEST_VERSION : null;
-    }
-
-    private function libsodium_version(): ?string
-    {
-        // Native sodium extension (bundled in PHP 7.2+, PECL libsodium for older)
-        if (extension_loaded('sodium') || extension_loaded('libsodium')) {
-            if (defined('SODIUM_LIBRARY_VERSION')) {
-                return SODIUM_LIBRARY_VERSION;
-            }
-            return 'unknown';
-        }
-        // Polyfill/compat library (WordPress includes sodium_compat)
-        if (class_exists('ParagonIE_Sodium_Compat', false)) {
-            return ParagonIE_Sodium_Compat::VERSION_STRING . '-compat';
-        }
-
-        return null;
     }
 }

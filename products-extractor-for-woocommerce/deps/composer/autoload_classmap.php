@@ -17,6 +17,7 @@ return array(
     'TorobDeps\\Firebase\\JWT\\SignatureInvalidException' => $vendorDir . '/firebase/php-jwt/src/SignatureInvalidException.php',
     'Torob\\Admin\\AdminPage' => $baseDir . '/includes/Admin/AdminPage.php',
     'Torob\\Admin\\TorobConnectivityCheckResult' => $baseDir . '/includes/Admin/TorobConnectivityCheckResult.php',
+    'Torob\\Lifecycle\\LifecycleEventReporter' => $baseDir . '/includes/Lifecycle/LifecycleEventReporter.php',
     'Torob\\OrderStatusTracking\\OrderHandler' => $baseDir . '/includes/OrderStatusTracking/OrderHandler.php',
     'Torob\\OrderStatusTracking\\OrderStatusEnum' => $baseDir . '/includes/OrderStatusTracking/OrderStatusEnum.php',
     'Torob\\OrderStatusTracking\\TorobStatusEnum' => $baseDir . '/includes/OrderStatusTracking/TorobStatusEnum.php',
@@ -33,6 +34,7 @@ return array(
     'Torob\\Utils\\DatabaseSchemaManager' => $baseDir . '/includes/Utils/DatabaseSchemaManager.php',
     'Torob\\Utils\\Options' => $baseDir . '/includes/Utils/Options.php',
     'Torob\\Utils\\ProductExtractionUtils' => $baseDir . '/includes/Utils/ProductExtractionUtils.php',
+    'Torob\\Utils\\SiteData' => $baseDir . '/includes/Utils/SiteData.php',
     'Torob\\Utils\\TorobHttpClient' => $baseDir . '/includes/Utils/TorobHttpClient.php',
     'Torob\\Utils\\TorobTokenValidator' => $baseDir . '/includes/Utils/TorobTokenValidator.php',
 );

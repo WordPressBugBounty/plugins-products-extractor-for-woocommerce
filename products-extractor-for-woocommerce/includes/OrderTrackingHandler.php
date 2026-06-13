@@ -383,16 +383,21 @@ class OrderTrackingHandler
             $status = 'completed';
         }
 
+        $woocommerce_currency = function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : null;
         $order_value = 0;
         $products = [];
         foreach ($order->get_items() as $item) {
-            $order_value += (int) round((float) $item->get_total());
+            $item_total = (float) $item->get_total();
+            $order_value += $this->normalize_price_for_torob($item_total, $woocommerce_currency);
             $product = $item->get_product();
             if ($product) {
                 $product_url = $this->normalize_product_url(get_permalink($product->get_id()));
                 $products[] = [
                     'product_url' => $product_url,
-                    'product_price' => (int) round((float) $item->get_total() / max(1, $item->get_quantity())),
+                    'product_price' => $this->normalize_price_for_torob(
+                        $item_total / max(1, $item->get_quantity()),
+                        $woocommerce_currency
+                    ),
                     'quantity' => $item->get_quantity()
                 ];
             }
@@ -414,7 +419,10 @@ class OrderTrackingHandler
             'torob_clid' => $torob_clid,
             'psp' => $this->get_order_psp($order),
             'order_value' => $order_value,
-            'shipping_amount' => (int) round((float) $order->get_shipping_total()),
+            'shipping_amount' => $this->normalize_price_for_torob(
+                (float) $order->get_shipping_total(),
+                $woocommerce_currency
+            ),
             'status' => $status,
             'last_updated_timestamp' => $date_for_last
                 ? $this->format_iso8601_timestamp($date_for_last->getTimestamp())
@@ -422,6 +430,18 @@ class OrderTrackingHandler
             'phone_number' => $phone_number,
             'products' => $products
         ];
+    }
+
+    /**
+     * Normalize WooCommerce price values to the Toman amounts expected by Torob.
+     */
+    private function normalize_price_for_torob(float $amount, ?string $woocommerce_currency): int
+    {
+        if ($woocommerce_currency === 'IRR') {
+            $amount /= 10;
+        }
+
+        return (int) round($amount);
     }
 
     /**
