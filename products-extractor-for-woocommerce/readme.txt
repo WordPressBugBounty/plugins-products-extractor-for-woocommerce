@@ -4,7 +4,7 @@ Tags: products, woocommerce, export, extract, torob
 Requires at least: 5.9
 Requires Plugins: woocommerce
 Tested up to: 7.0.0
-Stable tag: 2.2.0
+Stable tag: 2.3.0
 Requires PHP: 7.4
 License: MIT
 License URI: https://opensource.org/licenses/MIT
@@ -37,6 +37,14 @@ License URI: https://opensource.org/licenses/MIT
 3. افزونه را از بخش `افزونه‌ها` فعال کنید.
 
 == Changelog ==
+
+= 2.3.0 =
+
+* اضافه شدن مسیر جایگزین برای اجرای صف وب‌هوک محصولات در فروشگاه‌هایی که اجرای خودکار WP-Cron غیرفعال است.
+* حفظ WP-Cron به‌عنوان زمان‌بند اصلی و پشتیبانی از اجرای مستقیم `wp-cron.php` توسط کران سرور در کنار مسیر جایگزین.
+* بهبود قفل‌های اجرای صف و توکن مسیر داخلی برای جلوگیری از درخواست‌ها و پردازش‌های هم‌زمان.
+* نمایش زمان آخرین اجرای کامل و زمان اجرای بعدی صف وب‌هوک محصولات بالای جدول صف.
+* اصلاح زمان راه‌اندازی زمان‌بند برای جلوگیری از هشدار بارگذاری زودهنگام ترجمه ووکامرس هنگام ذخیره محصول.
 
 = 2.2.0 =
 

@@ -23,6 +23,9 @@ final class Options
     public const TOKEN_SET_AT_OPTION = 'torob_token_set_at';
     public const PLUGIN_DB_VERSION_OPTION = 'torob_plugin_db_version';
     public const PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION = 'torob_product_webhook_processing_lock';
+    public const PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION = 'torob_product_webhook_last_runner_started_at';
+    public const PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION = 'torob_product_webhook_last_runner_completed_at';
+    public const PRODUCT_PAGE_WEBHOOK_RUNNER_LOCK_OPTION = 'torob_product_webhook_runner_lock';
     public const REPORTED_VERSION_OPTION = 'torob_plugin_reported_version';
     private const ENABLED_VALUE = '1';
     private const DISABLED_VALUE = '0';
@@ -203,6 +206,124 @@ final class Options
     }
 
     /**
+     * Ensure the autoloaded queue-run timestamp exists.
+     *
+     * A zero value means the runner has not started yet and should run on the next request.
+     */
+    public static function initializeProductPageWebhookRunner(): bool
+    {
+        return add_option(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION, '0', '', true);
+    }
+
+    /**
+     * Get the last time the product webhook queue runner started.
+     */
+    public static function getProductPageWebhookRunnerLastStartedAt(): ?int
+    {
+        return self::getPositiveTimestamp(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION);
+    }
+
+    /**
+     * Record when the product webhook queue runner started.
+     */
+    public static function setProductPageWebhookRunnerLastStartedAt(int $timestamp): bool
+    {
+        return (
+            update_option(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION, (string) $timestamp, true)
+            || self::getProductPageWebhookRunnerLastStartedAt() === $timestamp
+        );
+    }
+
+    /**
+     * Get the last time the product webhook queue runner completed.
+     */
+    public static function getProductPageWebhookRunnerLastCompletedAt(): ?int
+    {
+        return self::getPositiveTimestamp(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION);
+    }
+
+    /**
+     * Record when the product webhook queue runner completed.
+     */
+    public static function setProductPageWebhookRunnerLastCompletedAt(int $timestamp): bool
+    {
+        return (
+            update_option(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION, (string) $timestamp, false)
+            || self::getProductPageWebhookRunnerLastCompletedAt() === $timestamp
+        );
+    }
+
+    /**
+     * Atomically replace the runner lock only when its stored value has not changed.
+     *
+     * @param mixed $expected_lock
+     * @param array<string, mixed> $replacement_lock
+     */
+    public static function replaceProductPageWebhookRunnerLock($expected_lock, array $replacement_lock): bool
+    {
+        return self::replaceLockOption(
+            self::PRODUCT_PAGE_WEBHOOK_RUNNER_LOCK_OPTION,
+            $expected_lock,
+            $replacement_lock
+        );
+    }
+
+    /**
+     * Atomically replace the processing lock only when its stored value has not changed.
+     *
+     * @param mixed $expected_lock
+     * @param array{token: string, expires_at: int} $replacement_lock
+     */
+    public static function replaceProductPageWebhookProcessingLock($expected_lock, array $replacement_lock): bool
+    {
+        return self::replaceLockOption(
+            self::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION,
+            $expected_lock,
+            $replacement_lock
+        );
+    }
+
+    /**
+     * Delete the processing lock only while its stored value still belongs to the caller.
+     *
+     * @param array{token: string, expires_at: int} $expected_lock
+     */
+    public static function deleteProductPageWebhookProcessingLock(array $expected_lock): bool
+    {
+        global $wpdb;
+
+        $deleted = $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->options}
+             WHERE option_name = %s
+               AND BINARY option_value = BINARY %s",
+            self::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION,
+            maybe_serialize($expected_lock)
+        ));
+
+        wp_cache_delete(self::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION, 'options');
+
+        return $deleted === 1;
+    }
+
+    /**
+     * Delete the request-driven fallback lock without removing shared run timestamps.
+     */
+    public static function resetProductPageWebhookRunnerLock(): bool
+    {
+        return delete_option(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LOCK_OPTION);
+    }
+
+    /**
+     * Delete all product webhook queue scheduling state.
+     */
+    public static function resetProductPageWebhookRunner(): void
+    {
+        delete_option(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION);
+        delete_option(self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION);
+        self::resetProductPageWebhookRunnerLock();
+    }
+
+    /**
      * Get the plugin version last reported to Torob via a lifecycle event.
      *
      * Empty string means nothing has been reported yet.
@@ -235,6 +356,9 @@ final class Options
             self::TOKEN_SET_AT_OPTION,
             self::PLUGIN_DB_VERSION_OPTION,
             self::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION,
+            self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION,
+            self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION,
+            self::PRODUCT_PAGE_WEBHOOK_RUNNER_LOCK_OPTION,
             self::REPORTED_VERSION_OPTION
         ];
     }
@@ -255,5 +379,40 @@ final class Options
     private static function normalize_bool(bool $enabled): string
     {
         return $enabled ? self::ENABLED_VALUE : self::DISABLED_VALUE;
+    }
+
+    /**
+     * Read a positive Unix timestamp from an option.
+     */
+    private static function getPositiveTimestamp(string $option_name): ?int
+    {
+        $timestamp = (int) get_option($option_name, 0);
+
+        return $timestamp > 0 ? $timestamp : null;
+    }
+
+    /**
+     * Atomically replace a non-autoloaded lock option when its value is unchanged.
+     *
+     * @param mixed $expected_lock
+     * @param array<string, mixed> $replacement_lock
+     */
+    private static function replaceLockOption(string $option_name, $expected_lock, array $replacement_lock): bool
+    {
+        global $wpdb;
+
+        $updated = $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options}
+             SET option_value = %s
+             WHERE option_name = %s
+               AND BINARY option_value = BINARY %s",
+            maybe_serialize($replacement_lock),
+            $option_name,
+            maybe_serialize($expected_lock)
+        ));
+
+        wp_cache_delete($option_name, 'options');
+
+        return $updated === 1;
     }
 }

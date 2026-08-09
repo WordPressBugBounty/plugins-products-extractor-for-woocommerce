@@ -517,6 +517,8 @@ class AdminPage
     private function render_pending_webhook_queue(): void
     {
         $total_pending = $this->product_page_webhook_handler->get_pending_queue_product_count();
+        $last_run_timestamp = $this->product_page_webhook_handler->get_queue_runner_last_run_timestamp();
+        $next_run_timestamp = $this->product_page_webhook_handler->get_queue_runner_next_run_timestamp();
         $total_pages = max(1, (int) ceil($total_pending / self::PENDING_WEBHOOK_PAGINATION_PAGE_SIZE));
         $current_page = min(max(1, absint($_GET['paged'] ?? 1)), $total_pages);
         $offset = ($current_page - 1) * self::PENDING_WEBHOOK_PAGINATION_PAGE_SIZE;
@@ -531,6 +533,20 @@ class AdminPage
 			<p class="description">
 				<?php printf('در حال حاضر %d محصول در صف ارسال قرار دارد.', $total_pending); ?>
 			</p>
+			<div class="torob-queue-run-timing">
+				<span class="torob-queue-run-time">
+					<span class="torob-queue-run-label">آخرین اجرا:</span>
+					<strong class="torob-queue-run-value">
+						<bdi><?php echo esc_html($this->format_runner_timestamp($last_run_timestamp)); ?></bdi>
+					</strong>
+				</span>
+				<span class="torob-queue-run-time">
+					<span class="torob-queue-run-label">اجرای بعدی:</span>
+					<strong class="torob-queue-run-value">
+						<bdi><?php echo esc_html($this->format_runner_timestamp($next_run_timestamp)); ?></bdi>
+					</strong>
+				</span>
+			</div>
 
 			<?php if (!empty($rows)): ?>
 				<table class="widefat striped torob-queue-table">
@@ -602,6 +618,18 @@ class AdminPage
 			</div>
 		</div>
 		<?php
+    }
+
+    /**
+     * Format a runner timestamp for display.
+     */
+    private function format_runner_timestamp(?int $timestamp): string
+    {
+        if ($timestamp === null) {
+            return 'هنوز ثبت نشده';
+        }
+
+        return get_date_from_gmt(gmdate('Y-m-d H:i:s', $timestamp), 'Y-m-d H:i:s');
     }
 
     /**
@@ -721,6 +749,33 @@ class AdminPage
 			.torob-queue-table td,
 			.torob-queue-table th {
 				vertical-align: middle;
+			}
+
+			.torob-queue-run-timing {
+				display: flex;
+				flex-direction: column;
+				align-items: flex-start;
+				gap: 8px;
+				margin: 12px 0 14px;
+			}
+
+			.torob-queue-run-time {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				padding: 6px 10px;
+				background: #f6f7f7;
+				border: 1px solid #dcdcde;
+				border-radius: 4px;
+			}
+
+			.torob-queue-run-label {
+				color: #646970;
+			}
+
+			.torob-queue-run-value {
+				color: #1d2327;
+				font-weight: 600;
 			}
 
 			.torob-toggle-switch {
@@ -864,6 +919,7 @@ class AdminPage
 			.torob-connectivity-details li {
 				margin-bottom: 4px;
 			}
+
 		';
     }
 }

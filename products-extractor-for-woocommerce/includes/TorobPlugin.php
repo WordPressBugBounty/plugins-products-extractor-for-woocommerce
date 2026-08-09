@@ -8,6 +8,7 @@ use Torob\Admin\AdminPage;
 use Torob\Lifecycle\LifecycleEventReporter;
 use Torob\OrderStatusTracking\OrderHandler;
 use Torob\ProductExtraction\ProductExtractor;
+use Torob\ProductWebhook\QueueRunner;
 use Torob\ProductWebhook\WebhookHandler;
 use Torob\ProductWebhook\WebhookQueueRepository;
 use Torob\Utils\DatabaseSchemaManager;
@@ -48,12 +49,13 @@ class TorobPlugin
     public static function deactivate(): void
     {
         LifecycleEventReporter::record_deactivation();
-        WebhookHandler::plugin_deactivated();
+        self::instance()->product_page_webhook_handler->plugin_deactivated();
     }
 
     public static function uninstall(): void
     {
         LifecycleEventReporter::record_uninstall();
+        QueueRunner::clear_state();
         WebhookQueueRepository::drop_table();
         Options::deleteAllPluginOptions();
     }
@@ -91,6 +93,6 @@ class TorobPlugin
         $this->product_extractor->register_products_route($this->token_validator);
         $this->order_handler->register_order_status_route($this->token_validator);
         $this->order_tracking_handler->register_orders_route($this->token_validator);
-        $this->product_page_webhook_handler->register_webhook_token_route($this->token_validator);
+        $this->product_page_webhook_handler->register_routes($this->token_validator);
     }
 }

@@ -18,32 +18,19 @@ class QueueServices
 {
     const CRON_HOOK = 'torob_process_pending_product_page_webhooks';
     const CRON_INTERVAL = 'every_five_minutes';
+    const PROCESSING_INTERVAL_SECONDS = 300;
     const BATCH_SIZE = 100;
-    const DEBOUNCE_SECONDS = 300;
-    const PROCESSING_LOCK_TTL_SECONDS = 300;
+    const DEBOUNCE_SECONDS = self::PROCESSING_INTERVAL_SECONDS;
+    const PROCESSING_LOCK_TTL_SECONDS = self::PROCESSING_INTERVAL_SECONDS;
 
     /** @var array<int, WebhookItem> */
     private static array $pending_queue_items = [];
     private static bool $shutdown_flush_registered = false;
 
     /**
-     * Register the cron schedule and processing hook.
+     * Remove all scheduled product webhook queue events.
      */
-    public function register_cron_hooks(): void
-    {
-        if (!Options::isProductPageWebhookReady()) {
-            return;
-        }
-
-        add_filter('cron_schedules', [$this, 'add_cron_schedule']);
-        add_action(self::CRON_HOOK, [$this, 'process_pending_product_page_webhooks']);
-
-        if (!wp_next_scheduled(self::CRON_HOOK)) {
-            wp_schedule_event(time(), self::CRON_INTERVAL, self::CRON_HOOK);
-        }
-    }
-
-    public static function unregister_cron_hooks(): void
+    public static function clear_cron_schedule(): void
     {
         wp_clear_scheduled_hook(self::CRON_HOOK);
     }
@@ -131,25 +118,6 @@ class QueueServices
     }
 
     /**
-     * Add the every-five-minutes cron schedule.
-     *
-     * @param array $schedules Existing cron schedules.
-     *
-     * @return array
-     */
-    public function add_cron_schedule(array $schedules): array
-    {
-        if (!array_key_exists(self::CRON_INTERVAL, $schedules)) {
-            $schedules[self::CRON_INTERVAL] = [
-                'interval' => 300,
-                'display' => 'Every Five Minutes'
-            ];
-        }
-
-        return $schedules;
-    }
-
-    /**
      * Process pending product page webhook entries: select debounced rows, send, and clean up.
      */
     public function process_pending_product_page_webhooks(): void
@@ -158,7 +126,8 @@ class QueueServices
             return;
         }
 
-        if (!$this->claim_processing_lock()) {
+        $processing_lock = $this->claim_processing_lock();
+        if ($processing_lock === null) {
             error_log('Product page webhook queue services: Processing lock already exists');
             return;
         }
@@ -190,10 +159,10 @@ class QueueServices
             if ($send_result->get_status_code() === 401) {
                 error_log('Product page webhook queue services: Unauthorized, resetting token');
                 Options::resetToken();
-                self::unregister_cron_hooks();
+                self::clear_cron_schedule();
             }
         } finally {
-            $this->release_processing_lock();
+            $this->release_processing_lock($processing_lock);
         }
     }
 
@@ -229,30 +198,57 @@ class QueueServices
 
     /**
      * Acquire a short-lived site-local processing lock.
+     *
+     * @return array{token: string, expires_at: int}|null
      */
-    private function claim_processing_lock(): bool
+    private function claim_processing_lock(): ?array
     {
-        $expires_at = time() + self::PROCESSING_LOCK_TTL_SECONDS;
+        $current_timestamp = time();
+        $processing_lock = [
+            'token' => wp_generate_password(64, false, false),
+            'expires_at' => $current_timestamp + self::PROCESSING_LOCK_TTL_SECONDS
+        ];
+        $existing_lock = get_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION, null);
 
-        if (add_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION, (string) $expires_at, '', false)) {
-            return true;
+        if ($existing_lock === null) {
+            return add_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION, $processing_lock, '', false)
+                ? $processing_lock
+                : null;
         }
 
-        $existing_expires_at = (int) get_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION, 0);
-        if ($existing_expires_at > time()) {
-            return false;
+        if ($this->is_processing_lock_active($existing_lock, $current_timestamp)) {
+            return null;
         }
 
-        delete_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION);
-
-        return add_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION, (string) $expires_at, '', false);
+        return Options::replaceProductPageWebhookProcessingLock($existing_lock, $processing_lock)
+            ? $processing_lock
+            : null;
     }
 
     /**
-     * Release the site-local processing lock.
+     * Check whether a current or legacy processing lock is still active.
+     *
+     * @param mixed $processing_lock
      */
-    private function release_processing_lock(): void
+    private function is_processing_lock_active($processing_lock, int $current_timestamp): bool
     {
-        delete_option(Options::PRODUCT_PAGE_WEBHOOK_PROCESSING_LOCK_OPTION);
+        if (is_array($processing_lock)) {
+            return (
+                array_key_exists('expires_at', $processing_lock)
+                && (int) $processing_lock['expires_at'] > $current_timestamp
+            );
+        }
+
+        return is_numeric($processing_lock) && (int) $processing_lock > $current_timestamp;
+    }
+
+    /**
+     * Release the site-local processing lock only while this worker still owns it.
+     *
+     * @param array{token: string, expires_at: int} $processing_lock
+     */
+    private function release_processing_lock(array $processing_lock): void
+    {
+        Options::deleteProductPageWebhookProcessingLock($processing_lock);
     }
 }
