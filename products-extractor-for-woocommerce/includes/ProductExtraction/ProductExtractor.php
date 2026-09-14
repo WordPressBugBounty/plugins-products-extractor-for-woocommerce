@@ -22,6 +22,7 @@ if (!defined('ABSPATH')) {
 class ProductExtractor
 {
     private const API_VERSION = 'torob_woocommerce_products_v1';
+    private const SINGLE_PRODUCT_VARIATION_ERROR = 'Product variations are not supported for single product requests.';
     private const INFORMATIONAL_PRODUCT_FIELDS = [
         'parent_id',
         'date_added',
@@ -66,6 +67,11 @@ class ProductExtractor
 
         $data = [];
         if (!empty($product_list)) {
+            if ($this->contains_variation($product_list)) {
+                return new WP_REST_Response([
+                    'error' => self::SINGLE_PRODUCT_VARIATION_ERROR
+                ], 400);
+            }
             $data = $this->get_list_products($product_list);
         } elseif (!empty($slug_list)) {
             $data = $this->get_list_slugs($slug_list);
@@ -334,6 +340,28 @@ class ProductExtractor
         }
 
         return $data;
+    }
+
+    /**
+     * Check whether a single-product lookup contains a variation ID.
+     *
+     * Variations are only valid in the paginated product-list response. They
+     * must not be treated as standalone product pages during an update.
+     *
+     * @param array $product_list Product IDs requested by the caller.
+     *
+     * @return bool Whether at least one requested ID is a product variation.
+     */
+    private function contains_variation(array $product_list): bool
+    {
+        foreach ($product_list as $product_id) {
+            $product = wc_get_product($product_id);
+            if ($product && $product->is_type('variation')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
