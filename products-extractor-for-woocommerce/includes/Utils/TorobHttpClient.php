@@ -30,7 +30,7 @@ final class TorobHttpClient
      *
      * The request is non-blocking with a short timeout and failures are swallowed.
      *
-     * @param string $event          One of activated|updated|deactivated|uninstalled.
+     * @param string $event          One of the LifecycleEventReporter::EVENT_* values.
      * @param string $plugin_version The current plugin version.
      */
     public static function send_lifecycle_event(string $event, string $plugin_version): void

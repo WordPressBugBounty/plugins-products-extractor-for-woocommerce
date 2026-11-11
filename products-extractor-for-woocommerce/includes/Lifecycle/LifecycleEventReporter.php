@@ -14,7 +14,8 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Sends plugin lifecycle events (activate / update / deactivate / uninstall) to Torob.
+ * Sends plugin lifecycle events (activate / update / deactivate / uninstall, and the owner switching Torob
+ * login on) to Torob.
  *
  * Dispatch is best-effort: errors are swallowed so the events never interrupt the
  * activation, deactivation or uninstall flow.
@@ -28,6 +29,7 @@ final class LifecycleEventReporter
     public const EVENT_UPDATED = 'updated';
     public const EVENT_DEACTIVATED = 'deactivated';
     public const EVENT_UNINSTALLED = 'uninstalled';
+    public const EVENT_LOGIN_ENABLED = 'login_enabled';
 
     /**
      * Register the admin version-change detection hook.
@@ -60,6 +62,15 @@ final class LifecycleEventReporter
     public static function record_uninstall(): void
     {
         self::send(self::EVENT_UNINSTALLED);
+    }
+
+    /**
+     * Send the `login_enabled` event: the owner switched Torob login on and the shop has no client yet, so Torob
+     * checks the shop now instead of at its next crawl.
+     */
+    public static function record_login_enabled(): void
+    {
+        self::send(self::EVENT_LOGIN_ENABLED);
     }
 
     /**

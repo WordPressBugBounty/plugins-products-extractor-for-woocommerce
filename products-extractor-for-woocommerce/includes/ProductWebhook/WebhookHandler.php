@@ -73,8 +73,10 @@ class WebhookHandler
 
     /**
      * Count products currently waiting in the webhook queue.
+     *
+     * @return int|null The pending count, or null when the queue cannot be read even after repairing a missing table.
      */
-    public function get_pending_queue_product_count(): int
+    public function get_pending_queue_product_count(): ?int
     {
         return $this->queue_services->count_pending();
     }

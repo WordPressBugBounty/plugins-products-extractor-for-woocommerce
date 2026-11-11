@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Torob;
 
 use Torob\Utils\Options;
+use Torob\Utils\PhoneNumber;
 use Torob\Utils\TorobTokenValidator;
 use WC_Order;
 use WP_REST_Request;
@@ -405,7 +406,7 @@ class OrderTrackingHandler
 
         $phone_number = $order->get_billing_phone();
         if (!empty($phone_number)) {
-            $phone_number = $this->normalize_phone_number($phone_number);
+            $phone_number = PhoneNumber::to_iranian_mobile($phone_number);
         }
 
         $date_created = $order->get_date_created();
@@ -467,30 +468,6 @@ class OrderTrackingHandler
         }
 
         return home_url($product_url);
-    }
-
-    /**
-     * Normalize phone number to standard Iranian mobile format (09XXXXXXXXX).
-     *
-     * @param string $phone Raw phone number (may include country code, leading zeros, or non-digit chars).
-     *
-     * @return string|null Normalized 11-digit phone number starting with '09', or null if not a valid Iranian mobile.
-     */
-    public function normalize_phone_number(string $phone)
-    {
-        $phone = preg_replace('/\D+/', '', $phone);
-        if (strpos($phone, '989') === 0) {
-            $phone = substr($phone, 2);
-        } elseif (strpos($phone, '00989') === 0) {
-            $phone = substr($phone, 4);
-        }
-        if (preg_match('/^9\d{9}$/', $phone)) {
-            $phone = '0' . $phone;
-        }
-        if (!preg_match('/^09\d{9}$/', $phone)) {
-            return null;
-        }
-        return $phone;
     }
 
     /**

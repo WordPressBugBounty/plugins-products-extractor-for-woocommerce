@@ -27,6 +27,11 @@ final class Options
     public const PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION = 'torob_product_webhook_last_runner_completed_at';
     public const PRODUCT_PAGE_WEBHOOK_RUNNER_LOCK_OPTION = 'torob_product_webhook_runner_lock';
     public const REPORTED_VERSION_OPTION = 'torob_plugin_reported_version';
+    public const TOROB_LOGIN_ENABLED_OPTION = 'torob_login_enabled';
+    public const TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION = 'torob_login_auto_placement_enabled';
+    public const LOGIN_BUTTON_THEME_OPTION = 'torob_login_button_theme';
+    public const TOROB_LOGIN_CLIENT_ID_OPTION = 'torob_login_client_id';
+    public const TOROB_LOGIN_CLIENT_REDIRECT_URI_OPTION = 'torob_login_client_redirect_uri';
     private const ENABLED_VALUE = '1';
     private const DISABLED_VALUE = '0';
 
@@ -324,6 +329,88 @@ final class Options
     }
 
     /**
+     * The Torob login button's theme the shop owner chose; empty until they choose one.
+     */
+    public static function getLoginButtonTheme(): string
+    {
+        $theme = get_option(self::LOGIN_BUTTON_THEME_OPTION, '');
+
+        return is_string($theme) ? $theme : '';
+    }
+
+    public static function setLoginButtonTheme(string $theme): bool
+    {
+        return update_option(self::LOGIN_BUTTON_THEME_OPTION, $theme, true);
+    }
+
+    /**
+     * Create the login options autoloaded, as their defaults, where they were never saved: reading a missing
+     * option costs a query on every request, and the login hooks read them on every page.
+     */
+    public static function initializeTorobLogin(): void
+    {
+        add_option(self::TOROB_LOGIN_ENABLED_OPTION, self::ENABLED_VALUE, '', true);
+        add_option(self::TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION, self::ENABLED_VALUE, '', true);
+        add_option(self::LOGIN_BUTTON_THEME_OPTION, '', '', true);
+        add_option(self::TOROB_LOGIN_CLIENT_ID_OPTION, '', '', true);
+        add_option(self::TOROB_LOGIN_CLIENT_REDIRECT_URI_OPTION, '', '', true);
+    }
+
+    /**
+     * Whether the owner keeps Torob login on. On by default, like the webhook: buyers see the button once
+     * Torob has set up the shop's client, and the owner can turn it off.
+     */
+    public static function isTorobLoginEnabled(): bool
+    {
+        return get_option(self::TOROB_LOGIN_ENABLED_OPTION, self::ENABLED_VALUE) === self::ENABLED_VALUE;
+    }
+
+    public static function setTorobLoginEnabled(bool $enabled): bool
+    {
+        return update_option(self::TOROB_LOGIN_ENABLED_OPTION, self::normalize_bool($enabled), true);
+    }
+
+    /**
+     * Whether the button puts itself in the login forms it knows. On by default; an owner whose theme shows it
+     * badly turns it off and places it with the shortcode or the Elementor widget, keeping Torob login on.
+     */
+    public static function isTorobLoginAutoPlacementEnabled(): bool
+    {
+        return get_option(self::TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION, self::ENABLED_VALUE) === self::ENABLED_VALUE;
+    }
+
+    public static function setTorobLoginAutoPlacementEnabled(bool $enabled): bool
+    {
+        return update_option(self::TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION, self::normalize_bool($enabled), true);
+    }
+
+    /**
+     * The OAuth client id Torob created for this shop and sent to the plugin; empty until it does.
+     */
+    public static function getTorobLoginClientId(): string
+    {
+        $client_id = get_option(self::TOROB_LOGIN_CLIENT_ID_OPTION, '');
+
+        return is_string($client_id) ? $client_id : '';
+    }
+
+    /**
+     * The login callback the plugin had when Torob sent the client id; Torob registered the client for it.
+     */
+    public static function getTorobLoginClientRedirectUri(): string
+    {
+        $redirect_uri = get_option(self::TOROB_LOGIN_CLIENT_REDIRECT_URI_OPTION, '');
+
+        return is_string($redirect_uri) ? $redirect_uri : '';
+    }
+
+    public static function setTorobLoginClient(string $client_id, string $redirect_uri): void
+    {
+        update_option(self::TOROB_LOGIN_CLIENT_ID_OPTION, $client_id, true);
+        update_option(self::TOROB_LOGIN_CLIENT_REDIRECT_URI_OPTION, $redirect_uri, true);
+    }
+
+    /**
      * Get the plugin version last reported to Torob via a lifecycle event.
      *
      * Empty string means nothing has been reported yet.
@@ -359,7 +446,12 @@ final class Options
             self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_STARTED_AT_OPTION,
             self::PRODUCT_PAGE_WEBHOOK_RUNNER_LAST_COMPLETED_AT_OPTION,
             self::PRODUCT_PAGE_WEBHOOK_RUNNER_LOCK_OPTION,
-            self::REPORTED_VERSION_OPTION
+            self::REPORTED_VERSION_OPTION,
+            self::TOROB_LOGIN_ENABLED_OPTION,
+            self::TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION,
+            self::LOGIN_BUTTON_THEME_OPTION,
+            self::TOROB_LOGIN_CLIENT_ID_OPTION,
+            self::TOROB_LOGIN_CLIENT_REDIRECT_URI_OPTION
         ];
     }
 

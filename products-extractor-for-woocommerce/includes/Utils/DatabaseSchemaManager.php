@@ -48,6 +48,32 @@ final class DatabaseSchemaManager
     }
 
     /**
+     * Reinstall the schema when the stored version is current but the plugin tables are missing.
+     *
+     * This happens when a site migration copies wp_options without the plugin tables. Healthy
+     * requests trust the stored version, so callers use this only after a plugin query fails
+     * and on plugin activation.
+     *
+     * @return bool Whether the plugin tables exist afterwards, whoever created them.
+     */
+    public static function repairMissingSchema(): bool
+    {
+        if (WebhookQueueRepository::table_exists()) {
+            return true;
+        }
+
+        Options::resetDbVersion();
+        self::migrateIfNeeded();
+        if (!WebhookQueueRepository::table_exists()) {
+            return false;
+        }
+
+        error_log('[Torob Plugin] Recreated missing product page webhook queue table');
+
+        return true;
+    }
+
+    /**
      * Apply a single schema migration version.
      */
     private static function migrateToVersion(int $version): void

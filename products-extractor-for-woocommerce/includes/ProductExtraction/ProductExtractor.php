@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Torob\ProductExtraction;
 
 use stdClass;
+use Throwable;
+use Torob\TorobLogin\Settings as TorobLoginSettings;
 use Torob\Utils\Options;
 use Torob\Utils\ProductExtractionUtils;
 use Torob\Utils\SiteData;
@@ -66,6 +68,7 @@ class ProductExtractor
         }
 
         $data = [];
+        $is_list_request = false;
         if (!empty($product_list)) {
             if ($this->contains_variation($product_list)) {
                 return new WP_REST_Response([
@@ -77,9 +80,10 @@ class ProductExtractor
             $data = $this->get_list_slugs($slug_list);
         } else {
             $data = $this->get_all_products($show_variations, $limit, $page);
+            $is_list_request = true;
         }
         $data['api_version'] = self::API_VERSION;
-        $data['metadata'] = $this->build_metadata();
+        $data['metadata'] = $this->build_metadata($is_list_request);
 
         return new WP_REST_Response($data, 200);
     }
@@ -500,11 +504,14 @@ class ProductExtractor
     /**
      * Build metadata array for the response.
      *
+     * @param bool $include_site_setup Whether to add the site setup facts. Bridge only reads metadata
+     *                                 from product list pages, so single-product lookups skip them.
+     *
      * @return array The metadata array.
      */
-    public function build_metadata(): array
+    public function build_metadata(bool $include_site_setup = false): array
     {
-        return [
+        $metadata = [
             'wordpress_version' => SiteData::wordpress_version(),
             'php_version' => SiteData::php_version(),
             'plugin_version' => TOROB_PLUGIN_VERSION,
@@ -514,6 +521,42 @@ class ProductExtractor
             'hpos_enabled' => Options::isHposEnabled(),
             'options' => $this->build_options_metadata()
         ];
+
+        return $include_site_setup ? array_merge($metadata, $this->build_site_setup_metadata()) : $metadata;
+    }
+
+    /**
+     * Build the site setup facts used to plan Torob login support.
+     *
+     * @return array The site setup metadata, or only `site_setup_error` when reading it failed.
+     */
+    private function build_site_setup_metadata(): array
+    {
+        try {
+            return [
+                'openssl_loaded' => SiteData::openssl_loaded(),
+                'pretty_permalinks' => SiteData::pretty_permalinks_enabled(),
+                'home_url_https' => SiteData::home_url_https(),
+                'request_https' => SiteData::request_https(),
+                'active_plugins' => SiteData::active_plugin_slugs(),
+                'must_use_plugins' => SiteData::must_use_plugin_slugs(),
+                'page_cache' => [
+                    'wp_cache' => SiteData::wp_cache_enabled(),
+                    'advanced_cache_dropin' => SiteData::advanced_cache_dropin_installed()
+                ],
+                'customer_login' => [
+                    'checkout_page_type' => SiteData::checkout_page_type(),
+                    'checkout_login_reminder' => SiteData::checkout_login_reminder_enabled(),
+                    'checkout_registration' => SiteData::checkout_registration_enabled(),
+                    'guest_checkout' => SiteData::guest_checkout_enabled(),
+                    'myaccount_page_type' => SiteData::myaccount_page_type(),
+                    'myaccount_registration' => SiteData::myaccount_registration_enabled()
+                ]
+            ];
+        } catch (Throwable $error) {
+            // These facts are optional; a failure here must not break the products API.
+            return ['site_setup_error' => get_class($error)];
+        }
     }
 
     /**
@@ -528,7 +571,12 @@ class ProductExtractor
             'orders_list_api_enabled' => Options::isOrdersListApiEnabled(),
             'product_page_webhook_enabled' => Options::isProductPageWebhookEnabled(),
             'has_torob_token' => Options::getToken() !== '',
-            'torob_token_set_at' => Options::getTokenSetAt()
+            'torob_token_set_at' => Options::getTokenSetAt(),
+            'torob_login_enabled' => Options::isTorobLoginEnabled(),
+            'torob_login_auto_placement_enabled' => Options::isTorobLoginAutoPlacementEnabled(),
+            'has_torob_login_client' => TorobLoginSettings::client_id() !== '',
+            // The exact callback Torob registers for the shop's client; it differs with permalinks and subfolders.
+            'torob_login_redirect_uri' => TorobLoginSettings::redirect_uri()
         ];
     }
 }

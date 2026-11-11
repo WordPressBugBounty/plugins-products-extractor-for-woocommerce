@@ -46,13 +46,19 @@ class TorobTokenValidator
     const ERROR_CONNECTION_FAILED = 'connection_failed';
 
     /**
-     * Validate token from request. Suitable for use as a permission_callback.
+     * Validate token from request. Suitable for use as a permission_callback; it also keeps the answer out of
+     * page caches, so a route that takes another permission_callback must do that itself.
      *
      * @param WP_REST_Request $request
      * @return true|WP_Error True on success, WP_Error on failure.
      */
     public function validate_token(WP_REST_Request $request)
     {
+        // An answer to Torob belongs to the token that asked for it, like an order lookup by the buyer's phone.
+        // Page caches that keep REST answers, as LiteSpeed Cache does by default, skip Cache-Control but not
+        // DONOTCACHEPAGE; they would serve it to anyone repeating the address without a token.
+        wc_maybe_define_constant('DONOTCACHEPAGE', true);
+
         $token = self::sanitize_opaque_token_value($request->get_header('X-Torob-Token'));
         $token_version = self::sanitize_opaque_token_value($request->get_header('X-Torob-Token-Version'));
 

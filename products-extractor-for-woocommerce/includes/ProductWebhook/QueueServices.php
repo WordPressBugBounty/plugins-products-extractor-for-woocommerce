@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Torob\ProductWebhook;
 
+use Torob\Utils\DatabaseSchemaManager;
 use Torob\Utils\Options;
 use Torob\Utils\TorobHttpClient;
 
@@ -26,6 +27,7 @@ class QueueServices
     /** @var array<int, WebhookItem> */
     private static array $pending_queue_items = [];
     private static bool $shutdown_flush_registered = false;
+    private bool $queue_table_repair_attempted = false;
 
     /**
      * Remove all scheduled product webhook queue events.
@@ -46,10 +48,23 @@ class QueueServices
 
     /**
      * Count products currently waiting in the webhook queue.
+     *
+     * @return int|null The pending count, or null when the queue cannot be read even after repairing a missing table.
      */
-    public function count_pending(): int
+    public function count_pending(): ?int
     {
-        return WebhookQueueRepository::count_pending();
+        $count = WebhookQueueRepository::count_pending();
+        if (!$this->last_query_failed()) {
+            return $count;
+        }
+
+        if (!$this->ensure_queue_table()) {
+            return null;
+        }
+
+        $count = WebhookQueueRepository::count_pending();
+
+        return $this->last_query_failed() ? null : $count;
     }
 
     /**
@@ -111,8 +126,8 @@ class QueueServices
         $pending_queue_items = self::$pending_queue_items;
         self::$pending_queue_items = [];
         foreach ($pending_queue_items as $product_id => $item) {
+            // A missing table is left to the queue run and the settings page, so shop requests never pay for its repair.
             $queued = $this->upsert_queued_item($item, $date_modified);
-
             $this->handle_queue_write_result($product_id, $queued);
         }
     }
@@ -140,6 +155,10 @@ class QueueServices
             );
 
             if (empty($rows)) {
+                if ($this->last_query_failed()) {
+                    $this->ensure_queue_table();
+                }
+
                 return;
             }
 
@@ -181,6 +200,32 @@ class QueueServices
 
             return;
         }
+    }
+
+    /**
+     * Check whether the last database query reported an error.
+     */
+    private function last_query_failed(): bool
+    {
+        global $wpdb;
+
+        return $wpdb->last_error !== '';
+    }
+
+    /**
+     * Recreate a missing queue table after a failed queue query, at most once per request.
+     *
+     * @return bool Whether the table exists now, so the failed query is worth one retry.
+     */
+    private function ensure_queue_table(): bool
+    {
+        if ($this->queue_table_repair_attempted) {
+            return false;
+        }
+
+        $this->queue_table_repair_attempted = true;
+
+        return DatabaseSchemaManager::repairMissingSchema();
     }
 
     /**

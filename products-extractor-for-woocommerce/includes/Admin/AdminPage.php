@@ -2,8 +2,12 @@
 
 namespace Torob\Admin;
 
+use Torob\Lifecycle\LifecycleEventReporter;
 use Torob\ProductExtraction\ProductExtractor;
 use Torob\ProductWebhook\WebhookHandler;
+use Torob\ProductWebhook\WebhookQueueRepository;
+use Torob\TorobLogin\LoginButton;
+use Torob\TorobLogin\Settings as TorobLoginSettings;
 use Torob\Utils\Options;
 use Torob\Utils\TorobHttpClient;
 
@@ -133,6 +137,21 @@ class AdminPage
 
         $webhook_enabled = ($_POST[Options::PRODUCT_PAGE_WEBHOOK_ENABLED_OPTION] ?? null) !== null;
         $this->product_page_webhook_handler->set_webhook_enabled($webhook_enabled);
+        $login_enabled = ($_POST[Options::TOROB_LOGIN_ENABLED_OPTION] ?? null) !== null;
+        $login_switched_on = $login_enabled && !Options::isTorobLoginEnabled();
+        Options::setTorobLoginEnabled($login_enabled);
+        if ($login_switched_on && TorobLoginSettings::client_id() === '') {
+            LifecycleEventReporter::record_login_enabled();
+        }
+
+        Options::setTorobLoginAutoPlacementEnabled(
+            ($_POST[Options::TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION] ?? null) !== null
+        );
+
+        $theme = $_POST[Options::LOGIN_BUTTON_THEME_OPTION] ?? null;
+        if (is_string($theme) && array_key_exists($theme, LoginButton::THEMES)) {
+            Options::setLoginButtonTheme($theme);
+        }
 
         return [['type' => 'success', 'message' => 'تنظیمات با موفقیت ذخیره شد.']];
     }
@@ -276,6 +295,12 @@ class AdminPage
                         <?php $this->render_webhook_enabled_row(); ?>
                     </table>
                 </div>
+                <div class="torob-admin-panel">
+                    <h2>ورود با ترب</h2>
+                    <table class="form-table torob-form-table">
+                        <?php $this->render_torob_login_rows(); ?>
+                    </table>
+                </div>
 				<div class="torob-actions">
 					<?php submit_button('ذخیره تنظیمات', 'primary', 'torob_settings_submit', false); ?>
 				</div>
@@ -294,6 +319,100 @@ class AdminPage
 			<?php endif; ?>
 		</div>
 		<?php }
+
+    /**
+     * The Torob login switch, how the button looks, where it shows, and the ways to put it on custom login
+     * forms.
+     */
+    private function render_torob_login_rows(): void
+    {
+        $enabled_option = Options::TOROB_LOGIN_ENABLED_OPTION;
+        $enabled = Options::isTorobLoginEnabled();
+        $auto_placement_option = Options::TOROB_LOGIN_AUTO_PLACEMENT_ENABLED_OPTION;
+        $client_id = TorobLoginSettings::client_id();
+        $current_theme = LoginButton::theme();
+        ?>
+		<tr>
+			<th scope="row">
+				<label for="<?php echo esc_attr($enabled_option); ?>">ورود با ترب</label>
+			</th>
+			<td>
+				<label class="torob-toggle-switch">
+					<input type="checkbox"
+					       id="<?php echo esc_attr($enabled_option); ?>"
+					       name="<?php echo esc_attr($enabled_option); ?>"
+					       value="1"
+						<?php checked($enabled); ?> />
+					<span class="torob-slider"></span>
+				</label>
+				<p class="description">کاربران با حساب ترب خود وارد فروشگاه شما می‌شوند. با خاموش کردن، دکمه از همه‌جا برداشته می‌شود.</p>
+				<?php if ($enabled): ?>
+					<?php if ($client_id !== ''): ?>
+						<strong class="description">ورود با ترب فعال است.</strong>
+						<p class="description">شناسه‌ی فروشگاه در ترب: <code><?php echo esc_html($client_id); ?></code></p>
+					<?php else: ?>
+						<div class="torob-webhook-status torob-webhook-status-pending">
+							<strong>در انتظار فعال‌سازی از سمت ترب</strong>
+							<p>ترب ورود را برای فروشگاه شما راه‌اندازی می‌کند و بعد از آن دکمه خودکار نمایش داده می‌شود.</p>
+						</div>
+					<?php endif; ?>
+				<?php endif; ?>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">ظاهر دکمه</th>
+			<td>
+				<fieldset>
+					<legend class="screen-reader-text"><span>ظاهر دکمه</span></legend>
+					<?php foreach (LoginButton::THEMES as $theme => $theme_name): ?>
+						<label style="display:flex;align-items:center;gap:10px;margin:0 0 10px;">
+							<input type="radio" name="<?php echo esc_attr(Options::LOGIN_BUTTON_THEME_OPTION); ?>"
+							       value="<?php echo esc_attr($theme); ?>" <?php checked($current_theme, $theme); ?> />
+							<span style="min-width:40px;"><?php echo esc_html($theme_name); ?></span>
+							<?php
+
+							// @mago-expect lint:no-unescaped-output sample() escapes every value it adds to the markup.
+							echo LoginButton::sample($theme);
+							?>
+						</label>
+					<?php endforeach; ?>
+				</fieldset>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="<?php echo esc_attr($auto_placement_option); ?>">جایگذاری خودکار دکمه</label>
+			</th>
+			<td>
+				<label class="torob-toggle-switch">
+					<input type="checkbox"
+					       id="<?php echo esc_attr($auto_placement_option); ?>"
+					       name="<?php echo esc_attr($auto_placement_option); ?>"
+					       value="1"
+						<?php checked(Options::isTorobLoginAutoPlacementEnabled()); ?> />
+					<span class="torob-slider"></span>
+				</label>
+				<p class="description">
+					روشن: دکمه خودش در فرم ورود ووکامرس (حساب کاربری و صفحه‌ی پرداخت)، صفحه‌ی wp-login.php، فرم‌های ورود دیجیتس و فرم‌های ورود پیامکی ورودک، اوتینو، فراز اس ام اس، وودمارت پلاس و پوسته‌های پارس‌کالا، دیناکالا و باکالا گذاشته می‌شود.
+					خاموش: اگر دکمه در این جاها با ظاهر سایت جور نیست، آن را فقط با کد کوتاه یا ابزارک المنتور خودتان بگذارید؛ ورود با ترب روشن می‌ماند، ولی صفحه‌ی wp-login.php دیگر دکمه ندارد.
+				</p>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">جاهای دیگر</th>
+			<td>
+				<input type="text" class="regular-text code" readonly onclick="this.select()"
+				       value="<?php echo esc_attr('[' . LoginButton::SHORTCODE . ']'); ?>" />
+				<p class="description">
+					این کد کوتاه را هر جا که فرم ورود سایت شماست بگذارید. در المنتور ابزارک «ورود با ترب» را به صفحه یا پاپ‌آپ ورود اضافه کنید.
+					برای ظاهری دیگر در یک جا: <code dir="ltr"><?php echo
+    					esc_html('[' . LoginButton::SHORTCODE . ' theme="red"]')
+					; ?></code>
+				</p>
+			</td>
+		</tr>
+		<?php
+    }
 
     /**
      * Render a products preview link using the same layout as other options.
@@ -517,6 +636,12 @@ class AdminPage
     private function render_pending_webhook_queue(): void
     {
         $total_pending = $this->product_page_webhook_handler->get_pending_queue_product_count();
+        if ($total_pending === null) {
+            $this->render_unreadable_webhook_queue();
+
+            return;
+        }
+
         $last_run_timestamp = $this->product_page_webhook_handler->get_queue_runner_last_run_timestamp();
         $next_run_timestamp = $this->product_page_webhook_handler->get_queue_runner_next_run_timestamp();
         $total_pages = max(1, (int) ceil($total_pending / self::PENDING_WEBHOOK_PAGINATION_PAGE_SIZE));
@@ -585,6 +710,26 @@ class AdminPage
 		</div>
 		<?php
     }
+
+    /**
+     * Render the queue panel when the queue cannot be read, even after repairing a missing table.
+     */
+    private function render_unreadable_webhook_queue(): void
+    { ?>
+		<div class="torob-admin-panel">
+			<h2>محصولات در صف ارسال از طریق وب‌هوک</h2>
+			<div class="torob-webhook-status torob-webhook-status-error">
+				<strong>صف وب‌هوک از پایگاه داده سایت خوانده نمی‌شود.</strong>
+				<p>
+					تا رفع این مشکل، تغییرات محصولات از طریق وب‌هوک به ترب ارسال نمی‌شود.
+					اگر جدول زیر در پایگاه داده نیست، افزونه نتوانسته آن را بسازد.
+					دسترسی‌های کاربر پایگاه داده سایت (مانند CREATE و SELECT) را بررسی کنید و خطای دقیق را در فایل error_log ببینید.
+					پس از رفع مشکل همین صفحه را دوباره باز کنید؛ اگر جدول نباشد، افزونه آن را می‌سازد.
+				</p>
+				<p>نام جدول: <code><?php echo esc_html(WebhookQueueRepository::get_table_name()); ?></code></p>
+			</div>
+		</div>
+		<?php }
 
     /**
      * Render pagination for the pending webhook queue table.
@@ -854,6 +999,12 @@ class AdminPage
 				color: #713f12;
 				background: #fffbeb;
 				border-color: #f59e0b;
+			}
+
+			.torob-webhook-status-error {
+				color: #7f1d1d;
+				background: #fef2f2;
+				border-color: #dc2626;
 			}
 
 			.torob-connectivity-check {

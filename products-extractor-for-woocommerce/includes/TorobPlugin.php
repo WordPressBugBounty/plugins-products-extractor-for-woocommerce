@@ -11,6 +11,7 @@ use Torob\ProductExtraction\ProductExtractor;
 use Torob\ProductWebhook\QueueRunner;
 use Torob\ProductWebhook\WebhookHandler;
 use Torob\ProductWebhook\WebhookQueueRepository;
+use Torob\TorobLogin\LoginHandler;
 use Torob\Utils\DatabaseSchemaManager;
 use Torob\Utils\Options;
 use Torob\Utils\TorobTokenValidator;
@@ -30,6 +31,7 @@ class TorobPlugin
     private AdminPage $admin_page;
     private TorobTokenValidator $token_validator;
     private LifecycleEventReporter $lifecycle_event_reporter;
+    private LoginHandler $torob_login_handler;
 
     public static function instance(): TorobPlugin
     {
@@ -43,6 +45,7 @@ class TorobPlugin
     public static function activate(): void
     {
         DatabaseSchemaManager::migrateIfNeeded();
+        DatabaseSchemaManager::repairMissingSchema();
         LifecycleEventReporter::record_activation();
     }
 
@@ -69,6 +72,7 @@ class TorobPlugin
         $this->admin_page = new AdminPage($this->product_extractor, $this->product_page_webhook_handler);
         $this->token_validator = new TorobTokenValidator();
         $this->lifecycle_event_reporter = new LifecycleEventReporter();
+        $this->torob_login_handler = new LoginHandler();
     }
 
     public function register_hooks(): void
@@ -86,6 +90,7 @@ class TorobPlugin
         $this->order_tracking_handler->register_hooks();
         $this->product_page_webhook_handler->register_hooks();
         $this->lifecycle_event_reporter->register_hooks();
+        $this->torob_login_handler->register_hooks();
     }
 
     public function register_routes(): void
@@ -94,5 +99,6 @@ class TorobPlugin
         $this->order_handler->register_order_status_route($this->token_validator);
         $this->order_tracking_handler->register_orders_route($this->token_validator);
         $this->product_page_webhook_handler->register_routes($this->token_validator);
+        $this->torob_login_handler->register_routes($this->token_validator);
     }
 }
